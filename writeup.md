@@ -26,37 +26,37 @@
 
 **Deliverable:** Brief annotations of 25 documents, plus the number of examples it takes until you see a high-quality example.
 
-**Answer:** TODO
+**Answer:** The first clearly high-quality webpage appeared at record 2, which is the USNCCM13 conference homepage. Many of the other early examples are dominated by spam, adult content, templated portals, error pages, or low-value navigation-heavy pages, although a few later records are also reasonably high-quality informational pages.
 
 | # | Language | Domain | Page type | Notes |
 | --- | --- | --- | --- | --- |
-| 1 | TODO | TODO | TODO | TODO |
-| 2 | TODO | TODO | TODO | TODO |
-| 3 | TODO | TODO | TODO | TODO |
-| 4 | TODO | TODO | TODO | TODO |
-| 5 | TODO | TODO | TODO | TODO |
-| 6 | TODO | TODO | TODO | TODO |
-| 7 | TODO | TODO | TODO | TODO |
-| 8 | TODO | TODO | TODO | TODO |
-| 9 | TODO | TODO | TODO | TODO |
-| 10 | TODO | TODO | TODO | TODO |
-| 11 | TODO | TODO | TODO | TODO |
-| 12 | TODO | TODO | TODO | TODO |
-| 13 | TODO | TODO | TODO | TODO |
-| 14 | TODO | TODO | TODO | TODO |
-| 15 | TODO | TODO | TODO | TODO |
-| 16 | TODO | TODO | TODO | TODO |
-| 17 | TODO | TODO | TODO | TODO |
-| 18 | TODO | TODO | TODO | TODO |
-| 19 | TODO | TODO | TODO | TODO |
-| 20 | TODO | TODO | TODO | TODO |
-| 21 | TODO | TODO | TODO | TODO |
-| 22 | TODO | TODO | TODO | TODO |
-| 23 | TODO | TODO | TODO | TODO |
-| 24 | TODO | TODO | TODO | TODO |
-| 25 | TODO | TODO | TODO | TODO |
+| 1 | Chinese | `10www.chinatikfans.com` | Discuz fan blog / forum page | Mostly login and navigation boilerplate; little substantive content visible in the preview. |
+| 2 | English | `13.usnccm.org` | Conference homepage | Clear event information, location, and menu structure; looks like a legitimate informational site. |
+| 3 | Chinese | `176.utchat888.com` | Adult video chat portal | Explicit adult gating, rankings, and payment-oriented portal text. |
+| 4 | Chinese | `176766.cn` | Spammy company / product page | Starts with explicit spam keywords, then switches into generic company-site navigation. |
+| 5 | Chinese | `178mh.com` | Broken template / error page | Only shows a missing-template message, so it has almost no useful textual content. |
+| 6 | Chinese | `1796370.tgtg97.com` | Adult cam host profile | Repetitive rankings, pricing, and chat-room boilerplate dominate the page. |
+| 7 | Chinese | `18sex.v340.info` | Adult portal landing page | Explicit sexual content plus repeated promotional and ranking text. |
+| 8 | Dutch | `1kb.klimtoren.be` | Personal or school blog post | A short blog entry with some boilerplate, but still a recognizable human-written post. |
+| 9 | Greek | `1pekesat-exae.mysch.gr` | Helpdesk search page | Mostly forum/search navigation text; low information density in this preview. |
+| 10 | Greek | `1pekesat-exae.mysch.gr` | Helpdesk login page | Almost entirely login and site-navigation boilerplate. |
+| 11 | Chinese | `1s6605084.yhxzseo.com` | SEO-style content page | Looks like a templated landing page with some readable article text mixed in. |
+| 12 | Turkish | `20com20.fr` | Documentation sitemap | Legitimate technical documentation, though it is mainly navigational rather than prose-heavy. |
+| 13 | English | `24ktcasino.net` | Casino blog post | Commercial gambling content with blog framing; some natural language but domain is narrow and promotional. |
+| 14 | English | `2kgames.eu` | Error page | Just a 404 page, so it is low-value training text. |
+| 15 | Chinese | `2l6185919.yizhangting.com` | SEO / entertainment landing page | Templated portal-style page with broad category links and vague promotional text. |
+| 16 | Chinese | `303323.com` | Medical device company news page | Legitimate company/news content, but still heavy on navigation and contact boilerplate. |
+| 17 | Chinese | `30bad.com` | Streaming / anime aggregator page | Media-index page with synopsis and navigation, not very content-rich. |
+| 18 | Chinese | `312001.net` | Hospital / clinic news page | Legitimate institutional site, but the preview is mostly navigation categories rather than article text. |
+| 19 | Chinese | `354577.mwe075.com` | Dating / video chat portal | Ranking tables, login prompts, and host-status text dominate the page. |
+| 20 | English | `356.schoollibrary.edu.pe.ca` | Library catalog search results page | Legitimate educational site, but this particular page is a noisy no-results catalog query. |
+| 21 | Chinese | `366392.haaxz.com` | Adult video portal page | Explicit adult categories and repetitive monetized portal text. |
+| 22 | Chinese | `366392.haaxz.com` | Adult video portal page | Near-duplicate of the previous portal page with different host/persona details. |
+| 23 | Chinese | `387tel.com` | Video chat / dating portal | Mostly account and ranking UI text, with little substantive prose. |
+| 24 | Spanish | `3diasdemarzo.blogspot.com` | News / opinion blog post | Long coherent article text about a specific political issue; comparatively high-quality prose. |
+| 25 | Danish | `3godetilbud.dk` | Commercial service landing page | Lead-generation page with short marketing copy and strong call-to-action language. |
 
-High-quality example first appeared at: TODO
+High-quality example first appeared at: record 2
 
 ---
 
