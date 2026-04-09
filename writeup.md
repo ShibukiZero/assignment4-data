@@ -67,7 +67,7 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** A 2-3 sentence response comparing and contrasting the two extracted texts.
 
-**Answer:** TODO
+**Answer:** Our extraction and the Common Crawl WET output recover much of the same underlying page content, including the product-related text and some of the same spammy or low-quality material. However, our extraction is much noisier: it preserves many HTML-structure artifacts, bullets, and template-like fragments that make the text substantially longer and less readable. For this example, the WET extraction seems better overall, because it is more compact and cleaner, even though it still retains some undesirable boilerplate.
 
 ---
 
