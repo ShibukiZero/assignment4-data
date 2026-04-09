@@ -5,7 +5,7 @@
 
 **Deliverable:** A 2-3 sentence response.
 
-**Answer:** TODO
+**Answer:** The first web page in the WARC file is `http://0371rykj.com/ipfhsb/34.html`. When I checked it on April 9, 2026, it was still accessible, although it redirected to `http://www.0371rykj.com/ipfhsb/34.html` before returning `200 OK`. From the raw HTML, the page appears to be a Chinese industrial equipment company page, but its title and meta tags contain suspicious keyword-stuffed adult-content terms, which suggests that the page may be polluted by SEO spam or other low-quality web content.
 
 ### (b)
 **Question:** Look at the corresponding WET file. Are there parts of the extracted text that should have been filtered out by the extractor? What might go wrong when training a model on text that looks like this? Conversely, what useful information can a model potentially extract from this page?
