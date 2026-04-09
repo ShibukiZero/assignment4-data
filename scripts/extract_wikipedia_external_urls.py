@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import gzip
-import io
 import re
 from pathlib import Path
 
@@ -186,15 +185,15 @@ def reconstruct_url_from_domain_index(domain_index: str | None, path: str | None
 
 
 def row_to_url(row: list[str | None]) -> str | None:
-    # Older schemas store the actual URL directly in column 3 (0-based index 2).
-    if len(row) >= 3 and row[2] and URL_RE.match(row[2]):
-        return row[2]
-
     # Newer schemas (>= 1.41) store domain and path separately.
     if len(row) >= 4:
         candidate = reconstruct_url_from_domain_index(row[-2], row[-1])
         if candidate:
             return candidate
+
+    # Older schemas store the actual URL directly in column 3 (0-based index 2).
+    if len(row) >= 3 and row[2] and URL_RE.match(row[2]):
+        return row[2]
 
     return None
 
