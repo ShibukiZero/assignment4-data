@@ -12,14 +12,14 @@
 
 **Deliverable:** A 3-4 sentence response.
 
-**Answer:** TODO
+**Answer:** Yes. The extracted text still contains a lot of content that should likely have been filtered out, including spammy keyword strings at the top, navigation items, contact information, repeated category lists, and footer-like boilerplate such as previous/next links and copyright text. Training on text like this could cause a model to learn low-value webpage templates, keyword stuffing, and repetitive site-specific fragments instead of clean natural language. At the same time, the page still contains some useful information, such as the company name, the product description, and technical specifications for the equipment, which could help the model learn domain-specific vocabulary and factual technical language.
 
 ### (c)
 **Question:** Describe an application domain for which this example might be useful to have in the training data, and one where it might not be.
 
 **Deliverable:** A 1-2 sentence response.
 
-**Answer:** TODO
+**Answer:** This example could be useful for a domain-specific system focused on Chinese industrial equipment, product catalogs, or technical retrieval, because it contains real company information, product descriptions, and equipment specifications. It would be much less suitable for training a general-purpose user-facing language model, since the page also contains spammy keywords, boilerplate navigation text, and other low-quality web artifacts.
 
 ### (d)
 **Question:** Look through 25 more WET records. For each record, briefly comment on the document's language, domain name, page type, and any other notable observations. How many examples does it take until you see what you would deem a high-quality webpage?
