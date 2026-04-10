@@ -32,6 +32,7 @@ DEFAULT_ALLOWED_CONTENT_TYPES = {
 DEFAULT_EXACT_BLOCKED_HOSTS = {
     "aboutus.com",
     "books.google.com",
+    "dashboard.wikiedu.org",
     "doi.org",
     "entities.oclc.org",
     "search.worldcat.org",
@@ -39,6 +40,7 @@ DEFAULT_EXACT_BLOCKED_HOSTS = {
     "web.archive.org",
     "www.dnsstuff.com",
     "www.google.com",
+    "www.hearxgroup.com",
     "www.minorplanet.info",
     "www.stopforumspam.com",
 }
@@ -188,12 +190,23 @@ def classify_url_heuristic(url: str) -> str | None:
             return "catalog_search_page"
         if host == "viaf.org":
             return "identifier_page"
+        if host == "dashboard.wikiedu.org":
+            return "dashboard_page"
+        if host == "www.hearxgroup.com":
+            return "marketing_homepage"
         if host in {"aboutus.com", "entities.oclc.org", "www.dnsstuff.com", "www.minorplanet.info", "www.stopforumspam.com"}:
             return "service_or_tool_site"
 
     for suffix in DEFAULT_BLOCKED_HOST_SUFFIXES:
         if host.endswith(suffix):
             return "wiki_tool_page"
+
+    if host == "www.olympedia.org" and path.startswith("/athletes/"):
+        return "structured_reference_page"
+    if host == "www.itis.gov" and "/servlet/singlerpt/" in path:
+        return "structured_reference_page"
+    if host == "www.overstrand.gov.za" and path in {"", "/"}:
+        return "municipal_homepage"
 
     if not path_segments and query:
         return "homepage_with_query"
