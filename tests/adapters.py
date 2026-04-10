@@ -3,42 +3,48 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from cs336_data.html_text import extract_text_from_html_bytes
+from cs336_data.harmful_content import classify_nsfw, classify_toxic_speech
+from cs336_data.langid import identify_language
+from cs336_data.pii import mask_emails, mask_ips, mask_phone_numbers
+from cs336_data.quality_classifier import classify_quality
+from cs336_data.quality import passes_gopher_quality_filters
 
 
 def run_extract_text_from_html_bytes(html_bytes: bytes) -> str | None:
-    raise NotImplementedError
+    return extract_text_from_html_bytes(html_bytes)
 
 
 def run_identify_language(text: str) -> tuple[Any, float]:
-    raise NotImplementedError
+    return identify_language(text)
 
 
 def run_mask_emails(text: str) -> tuple[str, int]:
-    raise NotImplementedError
+    return mask_emails(text)
 
 
 def run_mask_phone_numbers(text: str) -> tuple[str, int]:
-    raise NotImplementedError
+    return mask_phone_numbers(text)
 
 
 def run_mask_ips(text: str) -> tuple[str, int]:
-    raise NotImplementedError
+    return mask_ips(text)
 
 
 def run_classify_nsfw(text: str) -> tuple[Any, float]:
-    raise NotImplementedError
+    return classify_nsfw(text)
 
 
 def run_classify_toxic_speech(text: str) -> tuple[Any, float]:
-    raise NotImplementedError
+    return classify_toxic_speech(text)
 
 
 def run_classify_quality(text: str) -> tuple[Any, float]:
-    raise NotImplementedError
+    return classify_quality(text)
 
 
 def run_gopher_quality_filter(text: str) -> bool:
-    raise NotImplementedError
+    return passes_gopher_quality_filters(text)
 
 
 def run_exact_line_deduplication(
