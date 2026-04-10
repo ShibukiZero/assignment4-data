@@ -1,0 +1,14 @@
+{
+  "warc_paths": [
+    "/root/autodl-tmp/raw/cc_samples/example.warc.gz"
+  ],
+  "num_samples_requested": 20,
+  "num_samples_returned": 20,
+  "seed": 0,
+  "min_text_chars": 1,
+  "num_response_records": 27824,
+  "num_extraction_failures": 0,
+  "num_empty_or_short_text": 623,
+  "num_eligible_documents": 27201,
+  "num_documents_with_any_mask": 10107
+}

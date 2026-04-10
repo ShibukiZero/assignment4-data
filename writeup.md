@@ -123,14 +123,14 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** A 2-5 sentence response.
 
-**Answer:** TODO
+**Answer:** Harmful-content filtering can fail in both directions: it can miss genuinely toxic or NSFW material, but it can also remove legitimate text that discusses these topics in educational, journalistic, policy, or support contexts. If applied too aggressively, such filtering can distort the training distribution, disproportionately remove some styles or communities, and even make the model worse at recognizing, discussing, or safely responding to harmful content because it has seen too little of it in context. To mitigate this, I would avoid relying on a single hard classifier decision, combine confidence thresholds with manual audits of borderline cases, and distinguish between text that merely mentions harmful content and text that is itself primarily harmful.
 
 ### (4)
 **Question:** Run your harmful-content filters on text extracted from the WARC files. Look through 20 random examples and compare the classifier predictions to your own judgments. Report any classifier errors. What fraction of documents are harmful? Based on your observations, what would be suitable classifier confidence threshold(s) to use in filtering?
 
 **Deliverable:** A 2-5 sentence response.
 
-**Answer:** TODO
+**Answer:** In a manual review of 20 randomly sampled extracted documents, 19 of 20 classifier decisions matched my judgment. The clearest error was a likely false negative: an Arabic forum thread describing sexual assault and explicit images was labeled `non-nsfw` and `non-toxic` despite containing clearly disturbing sexual content in context. Across the full scanned sample, the filters marked `277 / 27,201` eligible documents (`1.02%`) as harmful by at least one classifier, so harmful pages appear to be relatively rare in this slice of the crawl. Given that several clearly benign pages still had only moderate non-harmful confidence, I would use conservative filtering thresholds, such as requiring at least about `0.8` confidence for toxic predictions and about `0.9` for NSFW predictions, while manually auditing borderline cases.
 
 ---
 
