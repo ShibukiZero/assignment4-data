@@ -112,7 +112,7 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** A 2-5 sentence response.
 
-**Answer:** TODO
+**Answer:** In a manual review of 20 sampled documents where at least one replacement occurred, most of the obvious matches were reasonable, but we still observed both false positives and false negatives. The clearest false positive came from a corrupted PDF-like sample, where binary garbage produced strings such as `E@NH.oB` that matched the email regex even though they were not real email addresses. We also observed false negatives for phone numbers: for example, the current pattern missed some non-US or more irregular local formats such as `0577-86809666 86809777`, and it did not consistently capture variants with leading digits such as `0321 4115583`. These examples suggest that regex-based masking is useful as a first pass, but brittle on noisy web text and incomplete across international formatting conventions.
 
 ---
 
