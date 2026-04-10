@@ -141,7 +141,7 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** A 2-5 sentence response.
 
-**Answer:** TODO
+**Answer:** In a manual review of 20 randomly sampled extracted documents, the Gopher-style rules did catch some clearly low-quality cases, such as a corrupted PDF-like document and an extremely short page consisting mostly of icon names. However, they also passed several pages that I would still consider low-value for language-model training, including a forum registration page, a GitLab topic listing, and a restaurant menu page, because these documents looked formally well-structured even though they were mostly boilerplate or navigation text. The rules also produced a likely false negative on a Chinese novel page, which was rejected mainly because too few tokens contained alphabetic characters; this highlights that the heuristic is biased toward English-like text. Overall, these rules are useful for catching obvious formatting failures, but they are too shallow to reliably separate genuinely high-value prose from templated or multilingual web content.
 
 ---
 
