@@ -105,7 +105,7 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** A 2-5 sentence response.
 
-**Answer:** TODO
+**Answer:** Naive PII masking can fail in both directions: it can miss real sensitive information, but it can also over-mask benign text such as code, configuration strings, example data, or technical documentation that happens to resemble an email address, phone number, or IP address. Excessive masking can also damage useful semantics by replacing information that is important for understanding customer support text, networking tutorials, or contact instructions, and it may cause the model to overproduce artificial placeholder strings. To mitigate these issues, I would combine conservative pattern design with manual audits, inspect false positives and false negatives on real web data, and use context-aware or document-type-aware rules when possible instead of relying on a single broad regex alone.
 
 ### (5)
 **Question:** Run your PII masking functions on text extracted from the WARC files. Look through 20 random examples where a replacement was made; give some examples of false positives and false negatives.
