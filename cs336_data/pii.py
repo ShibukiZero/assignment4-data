@@ -11,7 +11,7 @@ IP_PLACEHOLDER = "|||IP_ADDRESS|||"
 EMAIL_PATTERN = re.compile(
     r"(?<![\w.+-])"
     r"([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})"
-    r"(?![\w.-])"
+    r"(?![\w-])"
 )
 
 # Cover common US formats such as:

@@ -25,6 +25,14 @@ def test_mask_emails_multiple():
     assert num_masked == 2
 
 
+def test_mask_emails_sentence_ending_punctuation():
+    test_string = "Please email pl@fakedomain.ai."
+    expected_masked_text = "Please email |||EMAIL_ADDRESS|||."
+    masked_text, num_masked = run_mask_emails(test_string)
+    assert masked_text == expected_masked_text
+    assert num_masked == 1
+
+
 def test_mask_emails_existing_string():
     test_string = (
         "Some datasets use the string |||EMAIL_ADDRESS||| to represent masked PII. "
