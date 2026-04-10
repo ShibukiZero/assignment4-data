@@ -10,9 +10,10 @@ from urllib.parse import urlsplit, urlunsplit
 
 
 DEFAULT_INPUT_PATH = Path("/root/autodl-tmp/raw/wikipedia/extracted_urls.txt.gz")
-DEFAULT_OUTPUT_DIR = Path(".agents/logs/quality_classifier_positive_urls")
-DEFAULT_OUTPUT_URLS_PATH = DEFAULT_OUTPUT_DIR / "sampled_positive_urls.txt"
-DEFAULT_OUTPUT_SUMMARY_PATH = DEFAULT_OUTPUT_DIR / "summary.json"
+DEFAULT_DATA_OUTPUT_DIR = Path("/root/autodl-tmp/quality_classifier/positives")
+DEFAULT_LOG_OUTPUT_DIR = Path(".agents/logs/quality_classifier_positive_urls")
+DEFAULT_OUTPUT_URLS_PATH = DEFAULT_DATA_OUTPUT_DIR / "sampled_positive_urls.txt"
+DEFAULT_OUTPUT_SUMMARY_PATH = DEFAULT_LOG_OUTPUT_DIR / "summary.json"
 
 # These extensions are usually not useful for building a text quality classifier
 # because they are likely to be binaries, media files, downloads, or documents
@@ -106,7 +107,10 @@ def parse_args() -> argparse.Namespace:
         "--output-urls-path",
         type=Path,
         default=DEFAULT_OUTPUT_URLS_PATH,
-        help="Path to the output text file containing one sampled URL per line.",
+        help=(
+            "Path to the output text file containing one sampled URL per line. "
+            "This should usually point to a data-disk location rather than `.agents/logs/`."
+        ),
     )
     parser.add_argument(
         "--output-summary-path",
@@ -288,12 +292,14 @@ def main() -> None:
     final_domain_counts = Counter(urlsplit(url).netloc.lower() for url in final_urls)
 
     write_url_list(output_urls_path, final_urls)
+    output_urls_size_bytes = output_urls_path.stat().st_size
 
     summary = {
         "input_path": str(input_path),
         "output_urls_path": str(output_urls_path),
         "num_urls_requested": num_urls,
         "num_urls_returned": len(final_urls),
+        "output_urls_size_bytes": output_urls_size_bytes,
         "oversample_factor": oversample_factor,
         "reservoir_size": reservoir_size,
         "max_urls_per_domain": max_urls_per_domain,
@@ -304,6 +310,7 @@ def main() -> None:
             {"domain": domain, "count": count}
             for domain, count in final_domain_counts.most_common(20)
         ],
+        "sample_preview_urls": final_urls[:10],
         "suggested_wget_command": (
             f"wget --timeout=5 -i {output_urls_path} "
             f"--warc-file={output_urls_path.with_suffix('')} -O /dev/null"
