@@ -12,6 +12,8 @@ This directory archives the evidence currently used by `writeup.md` for the comp
   - Randomly sampled documents with masking applied, plus a short audit summary of the false positives and false negatives discussed in the writeup.
 - `2_5_harmful_content/`
   - Randomly sampled extracted documents, harmful-content classifier predictions, corpus-level summary statistics, and a short audit summary used for the writeup.
+- `2_6_gopher_quality_filters/`
+  - Randomly sampled extracted documents, rule-based quality-filter diagnostics, corpus-level pass/reject statistics, and a short audit summary used for the writeup.
 
 ## Provenance
 
