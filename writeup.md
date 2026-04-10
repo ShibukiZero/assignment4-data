@@ -73,12 +73,21 @@ High-quality example first appeared at: record 2
 
 ## Problem `language_identification`: Language Identification (6 points)
 
+### (a)
+**Question:** Write a function that takes a Unicode string and identifies the main language present in the string. Your function should return a pair containing a language identifier and a confidence score between 0 and 1.
+
+**Deliverable:** A function that performs language identification, giving its top language prediction and a score.
+
+**Answer:** We use the pre-trained fastText `lid.176.bin` language identification model. Our function returns the top language prediction and its confidence score, with adapter-side label normalization for outputs such as `en` and `zh`.
+
+---
+
 ### (b)
 **Question:** What issues could arise downstream from problems in the language identification procedure? In a higher-stakes scenario, how would you mitigate these issues?
 
 **Deliverable:** A 2-5 sentence response.
 
-**Answer:** TODO
+**Answer:** Errors in language identification can distort the training distribution in both directions: false positives can let non-target-language pages, mixed-language pages, or noisy template text into the dataset, while false negatives can remove useful in-language documents and reduce coverage of important domains or dialects. As a result, the final language model may generate more mixed-language or low-quality text, and it may underperform on legitimate examples that were filtered out too aggressively. In a higher-stakes setting, I would not rely on a single hard language-ID decision alone; instead, I would combine confidence thresholds, manual audits of borderline cases, and additional signals such as document length or character distribution, while also monitoring downstream behavior for systematic errors.
 
 ### (c)
 **Question:** Run your language identification system on text extracted from the WARC files. Manually identify the language in 20 random examples and compare your labels with the classifier predictions. Report any classifier errors. What fraction of documents are English? Based on your observations, what would be a suitable classifier confidence threshold to use in filtering?
