@@ -94,7 +94,7 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** A 2-5 sentence response.
 
-**Answer:** TODO
+**Answer:** In a manual review of 20 randomly sampled extracted documents, the classifier agreed with our labels on 19 of 20 examples. The clearest error was a corrupted PDF-like sample that was predicted as English with low confidence (`0.15`), even though the extracted text was largely non-linguistic garbage rather than clean natural-language content. Overall, `11/20` documents (`55%`) were English. Based on this audit, a confidence threshold around `0.4` seems reasonable: it would remove the obvious failure case while still keeping several correct but noisy boilerplate-heavy pages whose confidence scores were only around `0.47–0.51`.
 
 ---
 

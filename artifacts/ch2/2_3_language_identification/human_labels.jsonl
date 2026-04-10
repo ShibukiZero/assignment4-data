@@ -1,0 +1,20 @@
+{"sample_id":1,"manual_label":"ja","model_label":"ja","confidence":0.997626781463623,"agreement":"match","note":"Japanese forum thread with clear Japanese text."}
+{"sample_id":2,"manual_label":"ar","model_label":"ar","confidence":0.9898103475570679,"agreement":"match","note":"Arabic forum thread."}
+{"sample_id":3,"manual_label":"unknown","model_label":"en","confidence":0.15131665766239166,"agreement":"mismatch","note":"Corrupted PDF-like binary garbage rather than clean natural-language text."}
+{"sample_id":4,"manual_label":"en","model_label":"en","confidence":0.8671391010284424,"agreement":"match","note":"English corporate/news page."}
+{"sample_id":5,"manual_label":"nl","model_label":"nl","confidence":0.6851564645767212,"agreement":"match","note":"Dutch product/site page."}
+{"sample_id":6,"manual_label":"en","model_label":"en","confidence":0.913354218006134,"agreement":"match","note":"English registration page."}
+{"sample_id":7,"manual_label":"en","model_label":"en","confidence":0.47089749574661255,"agreement":"match","note":"English GitLab UI-heavy page; low confidence due to boilerplate."}
+{"sample_id":8,"manual_label":"he","model_label":"he","confidence":0.9996325373649597,"agreement":"match","note":"Hebrew Wikipedia page."}
+{"sample_id":9,"manual_label":"vi","model_label":"vi","confidence":0.9975004196166992,"agreement":"match","note":"Vietnamese ecommerce/florist page."}
+{"sample_id":10,"manual_label":"en","model_label":"en","confidence":0.4955812990665436,"agreement":"match","note":"English page with heavy boilerplate and icon text."}
+{"sample_id":11,"manual_label":"en","model_label":"en","confidence":0.9691593050956726,"agreement":"match","note":"English blog page."}
+{"sample_id":12,"manual_label":"de","model_label":"de","confidence":0.9723524451255798,"agreement":"match","note":"German business/contact page."}
+{"sample_id":13,"manual_label":"en","model_label":"en","confidence":0.7115695476531982,"agreement":"match","note":"English product page."}
+{"sample_id":14,"manual_label":"en","model_label":"en","confidence":0.7597765326499939,"agreement":"match","note":"English restaurant menu page."}
+{"sample_id":15,"manual_label":"en","model_label":"en","confidence":0.8919807076454163,"agreement":"match","note":"English marketing/services page."}
+{"sample_id":16,"manual_label":"zh","model_label":"zh","confidence":0.8281379342079163,"agreement":"match","note":"Chinese web-fiction page."}
+{"sample_id":17,"manual_label":"de","model_label":"de","confidence":0.9925746321678162,"agreement":"match","note":"German company site."}
+{"sample_id":18,"manual_label":"en","model_label":"en","confidence":0.8550701141357422,"agreement":"match","note":"English commercial real-estate page."}
+{"sample_id":19,"manual_label":"zh","model_label":"zh","confidence":0.5094242691993713,"agreement":"match","note":"Chinese ecommerce page with repeated template text and English product names."}
+{"sample_id":20,"manual_label":"en","model_label":"en","confidence":0.8757867813110352,"agreement":"match","note":"English blog/article page."}
