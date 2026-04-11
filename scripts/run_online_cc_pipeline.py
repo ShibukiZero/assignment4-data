@@ -85,6 +85,11 @@ def parse_args() -> argparse.Namespace:
         help="Keep stage-1 kept-doc files after stage-2 has written final outputs.",
     )
     parser.add_argument(
+        "--keep-deduped-docs",
+        action="store_true",
+        help="Keep stage-2 deduped JSONL docs after successful tokenization.",
+    )
+    parser.add_argument(
         "--skip-download",
         action="store_true",
         help="Use already present raw bucket files instead of downloading them.",
@@ -589,6 +594,7 @@ def build_manifest(args: argparse.Namespace, run_dir: Path, cwd: Path) -> dict[s
         "review_chars": args.review_chars,
         "keep_raw": args.keep_raw,
         "keep_stage1": args.keep_stage1,
+        "keep_deduped_docs": args.keep_deduped_docs,
         "skip_download": args.skip_download,
         "skip_stage1": args.skip_stage1,
         "skip_stage2": args.skip_stage2,
@@ -871,11 +877,34 @@ def main() -> None:
             event_name="tokenize",
             extra={"tokenized_bin": str(tokenized_bin)},
         )
+        deduped_docs_dir = stage2_dir / "deduped_docs"
+        if args.keep_deduped_docs:
+            append_event(
+                events_path,
+                "deduped_docs_cleanup_skipped",
+                deduped_docs_dir=str(deduped_docs_dir),
+            )
+        elif deduped_docs_dir.exists():
+            deduped_docs_bytes_before_cleanup = directory_size_bytes(deduped_docs_dir)
+            append_event(
+                events_path,
+                "deduped_docs_cleanup_start",
+                deduped_docs_dir=str(deduped_docs_dir),
+                bytes_before_cleanup=deduped_docs_bytes_before_cleanup,
+            )
+            shutil.rmtree(deduped_docs_dir)
+            append_event(
+                events_path,
+                "deduped_docs_cleanup_end",
+                deduped_docs_dir=str(deduped_docs_dir),
+                deleted_bytes=deduped_docs_bytes_before_cleanup,
+            )
     else:
         append_event(events_path, "tokenize_skipped", tokenized_bin=str(tokenized_bin))
 
     stage2_summary = read_json(stage2_summary_path) if stage2_summary_path.exists() else {}
     tokenized_summary = read_json(tokenized_summary_path) if tokenized_summary_path.exists() else {}
+    deduped_docs_dir = stage2_dir / "deduped_docs"
     final_report = {
         "status": "complete",
         "completed_at": utc_now(),
@@ -895,6 +924,9 @@ def main() -> None:
         "tokenized_bin": str(tokenized_bin),
         "tokenized_summary_path": str(tokenized_summary_path),
         "tokenized_summary": tokenized_summary,
+        "deduped_docs_dir": str(deduped_docs_dir),
+        "deduped_docs_retained": deduped_docs_dir.exists(),
+        "keep_deduped_docs": args.keep_deduped_docs,
         "final_disk_snapshot": disk_snapshot(run_dir.parent),
     }
     final_report_path = run_dir / "final_report.json"
