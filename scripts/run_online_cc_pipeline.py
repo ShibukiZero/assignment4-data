@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
         default="50K",
         help="aria2c lowest speed limit before retrying or failing a download.",
     )
-    parser.add_argument("--stage1-workers", type=int, default=24, help="Stage-1 worker processes.")
+    parser.add_argument("--stage1-workers", type=int, default=32, help="Stage-1 worker processes.")
     parser.add_argument("--stage2-workers", type=int, default=40, help="Stage-2 worker processes.")
     parser.add_argument("--phase3-chunk-docs", type=int, default=1000, help="Stage-2 phase-3 documents per task.")
     parser.add_argument("--tokenize-batch-size", type=int, default=256, help="Tokenizer document batch size.")
@@ -78,6 +78,11 @@ def parse_args() -> argparse.Namespace:
         "--keep-raw",
         action="store_true",
         help="Keep raw WET bucket files after successful stage-1 processing.",
+    )
+    parser.add_argument(
+        "--keep-stage1",
+        action="store_true",
+        help="Keep stage-1 kept-doc files after stage-2 has written final outputs.",
     )
     parser.add_argument(
         "--skip-download",
@@ -583,6 +588,7 @@ def build_manifest(args: argparse.Namespace, run_dir: Path, cwd: Path) -> dict[s
         "quality_threshold": args.quality_threshold,
         "review_chars": args.review_chars,
         "keep_raw": args.keep_raw,
+        "keep_stage1": args.keep_stage1,
         "skip_download": args.skip_download,
         "skip_stage1": args.skip_stage1,
         "skip_stage2": args.skip_stage2,
@@ -829,6 +835,8 @@ def main() -> None:
             "--review-chars",
             str(args.review_chars),
         ]
+        if not args.keep_stage1:
+            stage2_command.append("--delete-input-after-write")
         run_command(
             stage2_command,
             cwd=cwd,

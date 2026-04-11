@@ -5,6 +5,7 @@ import concurrent.futures
 import glob
 import hashlib
 import json
+import shutil
 from collections import Counter, defaultdict
 from pathlib import Path
 import time
@@ -26,6 +27,8 @@ from cs336_data.deduplication import (
 _SIMILARITY_NORMALIZED_TEXTS: list[str] = []
 _SIMILARITY_NGRAMS = 5
 _SIMILARITY_THRESHOLD = 0.8
+_DUPLICATE_LINE_HASHES: set[bytes] = set()
+_FUZZY_REMOVED_GLOBAL_DOC_INDICES: set[int] = set()
 
 
 def parse_args() -> argparse.Namespace:
@@ -88,6 +91,19 @@ def parse_args() -> argparse.Namespace:
         default=1000,
         help="Number of exact-stage documents per phase-3 preprocessing task.",
     )
+    parser.add_argument(
+        "--keep-work",
+        action="store_true",
+        help="Keep stage-2 temporary work files after they have been consumed.",
+    )
+    parser.add_argument(
+        "--delete-input-after-write",
+        action="store_true",
+        help=(
+            "Delete each input stage-1 kept-doc file after its final stage-2 outputs "
+            "have been written. This is intended for disk-constrained full-pipeline runs."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -125,6 +141,15 @@ def init_similarity_worker(
     _SIMILARITY_NORMALIZED_TEXTS = normalized_texts
     _SIMILARITY_NGRAMS = ngrams
     _SIMILARITY_THRESHOLD = jaccard_threshold
+
+
+def init_exact_worker(
+    duplicate_line_hashes: set[bytes],
+    fuzzy_removed_global_doc_indices: set[int] | None = None,
+) -> None:
+    global _DUPLICATE_LINE_HASHES, _FUZZY_REMOVED_GLOBAL_DOC_INDICES
+    _DUPLICATE_LINE_HASHES = duplicate_line_hashes
+    _FUZZY_REMOVED_GLOBAL_DOC_INDICES = fuzzy_removed_global_doc_indices or set()
 
 
 def similar_pairs_in_chunk(pair_chunk: list[tuple[int, int]]) -> list[tuple[int, int]]:
@@ -210,85 +235,191 @@ def count_line_hashes_for_stage1_file(
     return source_name, dict(counts), line_hash_counts
 
 
-def preprocess_exact_stage_file(
-    exact_stage_path: str,
-    preprocessed_path: str,
-    ngrams: int,
-    num_hashes: int,
-    source_name: str | None = None,
-) -> tuple[str, dict[str, int]]:
-    exact_stage_path_obj = Path(exact_stage_path)
-    preprocessed_path_obj = Path(preprocessed_path)
-    source_name = source_name or exact_stage_path_obj.name
+def exact_line_dedup_text(text: str) -> tuple[str, int, int, int]:
+    original_lines = document_lines(text)
+    kept_lines = [
+        doc_line
+        for doc_line in original_lines
+        if hash_line(doc_line) not in _DUPLICATE_LINE_HASHES
+    ]
+    exact_text = "".join(kept_lines)
+    return exact_text, len(original_lines), len(kept_lines), len(original_lines) - len(kept_lines)
+
+
+def count_exact_line_dedup_for_stage1_file(input_path: str) -> tuple[str, dict[str, int]]:
+    input_path_obj = Path(input_path)
+    source_name = input_path_obj.name
     counts = Counter()
-    seed_prefixes = [f"{seed}\x1f".encode("utf-8") for seed in range(num_hashes)]
 
-    with xopen(exact_stage_path_obj, "rt") as source, xopen(preprocessed_path_obj, "wt") as sink:
+    with xopen(input_path_obj, "rt") as source:
         for line in source:
-            entry = json.loads(line)
-            exact_text = entry["exact_text"]
-            normalized_text = normalize_document_for_deduplication(exact_text)
-            ngram_payloads = normalized_text_ngram_payloads(normalized_text, ngrams)
-            signature = list(
-                compute_minhash_signature_from_payloads(ngram_payloads, seed_prefixes)
+            payload = json.loads(line)
+            exact_text, _original_line_count, _exact_line_count, line_instances_removed = (
+                exact_line_dedup_text(payload["text"])
             )
+            counts["exact_line_instances_removed"] += line_instances_removed
 
-            sink.write(
-                json.dumps(
-                    {
-                        "global_doc_index": entry["global_doc_index"],
-                        "normalized_text": normalized_text,
-                        "signature": signature,
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-            counts["docs_preprocessed"] += 1
+            if not exact_text.strip():
+                counts["decision_exact_line_dedup_empty"] += 1
+            else:
+                counts["docs_after_exact_line_dedup"] += 1
 
     return source_name, dict(counts)
 
 
-def split_exact_stage_into_chunks(
-    exact_stage_path: Path,
-    chunk_dir: Path,
+def preprocess_stage1_file_to_chunks(
+    input_path: str,
+    preprocessed_chunk_dir: str,
+    global_doc_offset: int,
+    ngrams: int,
+    num_hashes: int,
     chunk_docs: int,
-) -> list[tuple[Path, str]]:
-    source_name = exact_stage_path.name
-    chunk_tasks: list[tuple[Path, str]] = []
+) -> tuple[str, list[str], dict[str, int]]:
+    input_path_obj = Path(input_path)
+    preprocessed_chunk_dir_obj = Path(preprocessed_chunk_dir)
+    source_name = input_path_obj.name
+    counts = Counter()
+    seed_prefixes = [f"{seed}\x1f".encode("utf-8") for seed in range(num_hashes)]
+    chunk_paths: list[str] = []
     chunk_index = 0
     docs_in_chunk = 0
+    local_doc_index = 0
     chunk_handle = None
 
     def open_chunk() -> tuple[Path, object]:
-        chunk_path = chunk_dir / f"{source_name}.chunk_{chunk_index:05d}.jsonl"
+        chunk_path = preprocessed_chunk_dir_obj / f"{source_name}.chunk_{chunk_index:05d}.jsonl.gz"
         return chunk_path, xopen(chunk_path, "wt")
 
     try:
-        with xopen(exact_stage_path, "rt") as source:
+        with xopen(input_path_obj, "rt") as source:
             current_chunk_path: Path | None = None
             for line in source:
+                payload = json.loads(line)
+                exact_text, _original_line_count, _exact_line_count, _line_instances_removed = (
+                    exact_line_dedup_text(payload["text"])
+                )
+
+                if not exact_text.strip():
+                    continue
+
                 if chunk_handle is None:
                     current_chunk_path, chunk_handle = open_chunk()
 
-                chunk_handle.write(line)
+                normalized_text = normalize_document_for_deduplication(exact_text)
+                ngram_payloads = normalized_text_ngram_payloads(normalized_text, ngrams)
+                signature = list(
+                    compute_minhash_signature_from_payloads(ngram_payloads, seed_prefixes)
+                )
+
+                chunk_handle.write(
+                    json.dumps(
+                        {
+                            "global_doc_index": global_doc_offset + local_doc_index,
+                            "normalized_text": normalized_text,
+                            "signature": signature,
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+
+                local_doc_index += 1
                 docs_in_chunk += 1
+                counts["docs_preprocessed"] += 1
 
                 if docs_in_chunk >= chunk_docs:
                     chunk_handle.close()
-                    chunk_tasks.append((current_chunk_path, source_name))
+                    chunk_paths.append(str(current_chunk_path))
                     chunk_index += 1
                     docs_in_chunk = 0
                     chunk_handle = None
 
             if chunk_handle is not None:
                 chunk_handle.close()
-                chunk_tasks.append((current_chunk_path, source_name))
+                chunk_paths.append(str(current_chunk_path))
     finally:
         if chunk_handle is not None and not chunk_handle.closed:
             chunk_handle.close()
 
-    return chunk_tasks
+    return source_name, chunk_paths, dict(counts)
+
+
+def write_final_outputs_for_stage1_file(
+    input_path: str,
+    output_dir: str,
+    global_doc_offset: int,
+    review_chars: int,
+    delete_input_after_write: bool,
+) -> tuple[str, dict[str, int], bool]:
+    input_path_obj = Path(input_path)
+    output_dir_obj = Path(output_dir)
+    source_name = input_path_obj.name
+    counts = Counter()
+    local_doc_index = 0
+    deduped_path = output_dir_obj / "deduped_docs" / source_name
+    review_path = output_dir_obj / "review_logs" / source_name
+    deduped_path.parent.mkdir(parents=True, exist_ok=True)
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with (
+        xopen(input_path_obj, "rt") as handle,
+        xopen(deduped_path, "at") as deduped_sink,
+        xopen(review_path, "at") as review_sink,
+    ):
+        for line in handle:
+            payload = json.loads(line)
+            exact_text, original_line_count, exact_line_count, line_instances_removed = (
+                exact_line_dedup_text(payload["text"])
+            )
+
+            if not exact_text.strip():
+                review_payload = {
+                    **payload,
+                    "decision": "drop",
+                    "drop_reason": "exact_line_dedup_empty",
+                    "original_line_count": original_line_count,
+                    "exact_line_count": exact_line_count,
+                    "exact_line_instances_removed": line_instances_removed,
+                    "text_preview": text_preview(payload["text"], review_chars),
+                }
+                review_sink.write(json.dumps(review_payload, ensure_ascii=False) + "\n")
+                continue
+
+            global_doc_index = global_doc_offset + local_doc_index
+            local_doc_index += 1
+
+            if global_doc_index in _FUZZY_REMOVED_GLOBAL_DOC_INDICES:
+                counts["decision_minhash_duplicate"] += 1
+                review_payload = {
+                    **payload,
+                    "decision": "drop",
+                    "drop_reason": "minhash_duplicate",
+                    "original_line_count": original_line_count,
+                    "exact_line_count": exact_line_count,
+                    "exact_line_instances_removed": line_instances_removed,
+                    "text_preview": text_preview(exact_text, review_chars),
+                }
+                review_sink.write(json.dumps(review_payload, ensure_ascii=False) + "\n")
+                continue
+
+            kept_payload = dict(payload)
+            kept_payload["text"] = exact_text
+            kept_payload["text_preview"] = text_preview(exact_text, review_chars)
+            kept_payload["dedup"] = {
+                "exact_line_instances_removed": line_instances_removed,
+                "original_line_count": original_line_count,
+                "exact_line_count": exact_line_count,
+                "minhash_survivor": True,
+            }
+            deduped_sink.write(json.dumps(kept_payload, ensure_ascii=False) + "\n")
+            counts["decision_keep"] += 1
+
+    input_deleted = False
+    if delete_input_after_write:
+        input_path_obj.unlink()
+        input_deleted = True
+
+    return source_name, dict(counts), input_deleted
 
 
 def source_output_paths(output_dir: Path, source_name: str) -> tuple[Path, Path, Path]:
@@ -329,8 +460,7 @@ def ensure_output_layout(output_dir: Path) -> dict[str, Path]:
         "deduped_docs": output_dir / "deduped_docs",
         "review_logs": output_dir / "review_logs",
         "summaries": output_dir / "summaries",
-        "exact_stage": output_dir / "_work" / "exact_stage",
-        "exact_chunks": output_dir / "_work" / "exact_chunks",
+        "work": output_dir / "_work",
         "preprocessed_chunks": output_dir / "_work" / "preprocessed_chunks",
     }
     for path in layout.values():
@@ -383,100 +513,61 @@ def main() -> None:
             line_hash_counts.update(local_counter)
     phase_elapsed_seconds["phase_1_line_hash_counting"] = time.time() - phase_start
 
-    # Phase 2: exact line deduplication, preserving the global input order used
-    # by Chapter 3 before MinHash survivor selection.
+    duplicate_line_hashes = {
+        line_hash for line_hash, count in line_hash_counts.items() if count > 1
+    }
+    del line_hash_counts
+
+    # Phase 2: exact line deduplication planning. This computes per-file survivor
+    # counts first so phase 3 can assign stable global_doc_index offsets while
+    # still processing files in parallel.
     phase_start = time.time()
-    next_global_doc_index = 0
-    exact_stage_paths: list[Path] = []
-    for input_path in input_paths:
-        source_name = input_path.name
-        exact_stage_path = layout["exact_stage"] / source_name
-        exact_stage_paths.append(exact_stage_path)
-
-        with xopen(input_path, "rt") as source, xopen(exact_stage_path, "wt") as sink:
-            for line in source:
-                payload = json.loads(line)
-                original_lines = document_lines(payload["text"])
-                kept_lines = [
-                    doc_line
-                    for doc_line in original_lines
-                    if line_hash_counts[hash_line(doc_line)] == 1
-                ]
-                exact_text = "".join(kept_lines)
-                line_instances_removed = len(original_lines) - len(kept_lines)
-
-                aggregate["exact_line_instances_removed"] += line_instances_removed
-                source_counts[source_name]["exact_line_instances_removed"] += line_instances_removed
-
-                if not exact_text.strip():
-                    aggregate["decision_exact_line_dedup_empty"] += 1
-                    source_counts[source_name]["decision_exact_line_dedup_empty"] += 1
-                    review_payload = {
-                        **payload,
-                        "decision": "drop",
-                        "drop_reason": "exact_line_dedup_empty",
-                        "original_line_count": len(original_lines),
-                        "exact_line_count": len(kept_lines),
-                        "exact_line_instances_removed": line_instances_removed,
-                        "text_preview": text_preview(payload["text"], args.review_chars),
-                    }
-                    append_jsonl(layout["review_logs"] / source_name, review_payload)
-                    continue
-
-                sink.write(
-                    json.dumps(
-                        {
-                            "global_doc_index": next_global_doc_index,
-                            "source_name": source_name,
-                            "payload": payload,
-                            "exact_text": exact_text,
-                            "original_line_count": len(original_lines),
-                            "exact_line_count": len(kept_lines),
-                            "exact_line_instances_removed": line_instances_removed,
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-                aggregate["docs_after_exact_line_dedup"] += 1
-                source_counts[source_name]["docs_after_exact_line_dedup"] += 1
-                next_global_doc_index += 1
-    phase_elapsed_seconds["phase_2_exact_line_dedup"] = time.time() - phase_start
-
-    # Phase 3: parallel normalization + signature computation on exact-surviving docs.
-    phase_start = time.time()
-    exact_chunk_tasks: list[tuple[Path, str]] = []
-    for exact_stage_path in exact_stage_paths:
-        exact_chunk_tasks.extend(
-            split_exact_stage_into_chunks(
-                exact_stage_path,
-                layout["exact_chunks"],
-                args.phase3_chunk_docs,
-            )
-        )
-
-    preprocessed_chunk_paths = [
-        layout["preprocessed_chunks"] / chunk_path.name
-        for chunk_path, _source_name in exact_chunk_tasks
-    ]
-    with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
+    with concurrent.futures.ProcessPoolExecutor(
+        max_workers=worker_count,
+        initializer=init_exact_worker,
+        initargs=(duplicate_line_hashes,),
+    ) as executor:
         futures = [
-            executor.submit(
-                preprocess_exact_stage_file,
-                str(exact_chunk_path),
-                str(preprocessed_chunk_path),
-                args.ngrams,
-                args.num_hashes,
-                source_name,
-            )
-            for (exact_chunk_path, source_name), preprocessed_chunk_path in zip(
-                exact_chunk_tasks,
-                preprocessed_chunk_paths,
-                strict=True,
-            )
+            executor.submit(count_exact_line_dedup_for_stage1_file, str(input_path))
+            for input_path in input_paths
         ]
         for future in concurrent.futures.as_completed(futures):
             source_name, counts = future.result()
+            aggregate.update(counts)
+            source_counts[source_name].update(counts)
+
+    global_doc_offsets: dict[str, int] = {}
+    next_global_doc_index = 0
+    for input_path in input_paths:
+        source_name = input_path.name
+        global_doc_offsets[source_name] = next_global_doc_index
+        next_global_doc_index += source_counts[source_name]["docs_after_exact_line_dedup"]
+    phase_elapsed_seconds["phase_2_exact_line_dedup"] = time.time() - phase_start
+
+    # Phase 3: directly preprocess exact-surviving docs into compact compressed
+    # chunks. This avoids materializing exact_stage and exact_chunks copies.
+    phase_start = time.time()
+    preprocessed_chunk_paths: list[Path] = []
+    with concurrent.futures.ProcessPoolExecutor(
+        max_workers=worker_count,
+        initializer=init_exact_worker,
+        initargs=(duplicate_line_hashes,),
+    ) as executor:
+        futures = [
+            executor.submit(
+                preprocess_stage1_file_to_chunks,
+                str(input_path),
+                str(layout["preprocessed_chunks"]),
+                global_doc_offsets[input_path.name],
+                args.ngrams,
+                args.num_hashes,
+                args.phase3_chunk_docs,
+            )
+            for input_path in input_paths
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            source_name, chunk_paths, counts = future.result()
+            preprocessed_chunk_paths.extend(Path(path) for path in chunk_paths)
             aggregate.update(counts)
             source_counts[source_name].update(counts)
     phase_elapsed_seconds["phase_3_signature_preprocessing"] = time.time() - phase_start
@@ -485,21 +576,54 @@ def main() -> None:
     phase_start = time.time()
     fuzzy_global_doc_indices: list[int] = []
     fuzzy_signatures: list[tuple[int, ...]] = []
-    fuzzy_normalized_texts: list[str] = []
-    preprocessed_entries: list[dict] = []
+    preprocessed_signature_entries: list[tuple[int, tuple[int, ...]]] = []
+    preprocessed_chunks_deleted = 0
     for preprocessed_chunk_path in preprocessed_chunk_paths:
         with xopen(preprocessed_chunk_path, "rt") as handle:
             for line in handle:
-                preprocessed_entries.append(json.loads(line))
+                entry = json.loads(line)
+                preprocessed_signature_entries.append(
+                    (entry["global_doc_index"], tuple(entry["signature"]))
+                )
 
-    preprocessed_entries.sort(key=lambda entry: entry["global_doc_index"])
-    for entry in preprocessed_entries:
-        fuzzy_global_doc_indices.append(entry["global_doc_index"])
-        fuzzy_signatures.append(tuple(entry["signature"]))
-        fuzzy_normalized_texts.append(entry["normalized_text"])
+    preprocessed_signature_entries.sort(key=lambda entry: entry[0])
+    for global_doc_index, signature in preprocessed_signature_entries:
+        fuzzy_global_doc_indices.append(global_doc_index)
+        fuzzy_signatures.append(signature)
+    preprocessed_signature_entries.clear()
 
     candidate_pairs = candidate_duplicate_pairs(fuzzy_signatures, args.num_bands)
     aggregate["minhash_candidate_pairs"] = len(candidate_pairs)
+
+    fuzzy_normalized_texts = [""] * len(fuzzy_signatures)
+    if candidate_pairs:
+        candidate_local_indices = {
+            local_index for pair in candidate_pairs for local_index in pair
+        }
+        candidate_global_doc_indices = {
+            fuzzy_global_doc_indices[local_index] for local_index in candidate_local_indices
+        }
+        local_index_by_global_doc_index = {
+            global_doc_index: local_index
+            for local_index, global_doc_index in enumerate(fuzzy_global_doc_indices)
+            if global_doc_index in candidate_global_doc_indices
+        }
+
+        for preprocessed_chunk_path in preprocessed_chunk_paths:
+            with xopen(preprocessed_chunk_path, "rt") as handle:
+                for line in handle:
+                    entry = json.loads(line)
+                    global_doc_index = entry["global_doc_index"]
+                    if global_doc_index in candidate_global_doc_indices:
+                        fuzzy_normalized_texts[
+                            local_index_by_global_doc_index[global_doc_index]
+                        ] = entry["normalized_text"]
+
+    if not args.keep_work:
+        for preprocessed_chunk_path in preprocessed_chunk_paths:
+            if preprocessed_chunk_path.exists():
+                preprocessed_chunk_path.unlink()
+                preprocessed_chunks_deleted += 1
     phase_elapsed_seconds["phase_4_candidate_generation"] = time.time() - phase_start
 
     # Phase 5: parallel confirmation of candidate pairs with true Jaccard.
@@ -553,44 +677,36 @@ def main() -> None:
     }
     phase_elapsed_seconds["phase_5_candidate_confirmation"] = time.time() - phase_start
 
-    # Phase 6: final write-back with the original metadata restored.
+    # Phase 6: final write-back with the original metadata restored. Re-reading
+    # stage-1 inputs avoids keeping a full exact_stage payload copy on disk.
     phase_start = time.time()
-    for exact_stage_path in exact_stage_paths:
-        source_name = exact_stage_path.name
-        with xopen(exact_stage_path, "rt") as handle:
-            for line in handle:
-                entry = json.loads(line)
-                payload = entry["payload"]
-                global_doc_index = entry["global_doc_index"]
-
-                if global_doc_index in fuzzy_removed_global_doc_indices:
-                    aggregate["decision_minhash_duplicate"] += 1
-                    source_counts[source_name]["decision_minhash_duplicate"] += 1
-                    review_payload = {
-                        **payload,
-                        "decision": "drop",
-                        "drop_reason": "minhash_duplicate",
-                        "original_line_count": entry["original_line_count"],
-                        "exact_line_count": entry["exact_line_count"],
-                        "exact_line_instances_removed": entry["exact_line_instances_removed"],
-                        "text_preview": text_preview(entry["exact_text"], args.review_chars),
-                    }
-                    append_jsonl(layout["review_logs"] / source_name, review_payload)
-                    continue
-
-                kept_payload = dict(payload)
-                kept_payload["text"] = entry["exact_text"]
-                kept_payload["text_preview"] = text_preview(entry["exact_text"], args.review_chars)
-                kept_payload["dedup"] = {
-                    "exact_line_instances_removed": entry["exact_line_instances_removed"],
-                    "original_line_count": entry["original_line_count"],
-                    "exact_line_count": entry["exact_line_count"],
-                    "minhash_survivor": True,
-                }
-                append_jsonl(layout["deduped_docs"] / source_name, kept_payload)
-                aggregate["decision_keep"] += 1
-                source_counts[source_name]["decision_keep"] += 1
+    input_files_deleted = 0
+    with concurrent.futures.ProcessPoolExecutor(
+        max_workers=worker_count,
+        initializer=init_exact_worker,
+        initargs=(duplicate_line_hashes, fuzzy_removed_global_doc_indices),
+    ) as executor:
+        futures = [
+            executor.submit(
+                write_final_outputs_for_stage1_file,
+                str(input_path),
+                str(output_dir),
+                global_doc_offsets[input_path.name],
+                args.review_chars,
+                args.delete_input_after_write,
+            )
+            for input_path in input_paths
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            source_name, counts, input_deleted = future.result()
+            aggregate.update(counts)
+            source_counts[source_name].update(counts)
+            if input_deleted:
+                input_files_deleted += 1
     phase_elapsed_seconds["phase_6_write_back"] = time.time() - phase_start
+
+    if not args.keep_work and layout["work"].exists():
+        shutil.rmtree(layout["work"])
 
     summary_paths = write_per_source_summaries(
         input_paths=input_paths,
@@ -608,8 +724,15 @@ def main() -> None:
         "review_chars": args.review_chars,
         "workers": worker_count,
         "phase3_chunk_docs": args.phase3_chunk_docs,
+        "keep_work": args.keep_work,
+        "delete_input_after_write": args.delete_input_after_write,
         "total_elapsed_seconds": time.time() - total_start,
         "phase_elapsed_seconds": phase_elapsed_seconds,
+        "cleanup": {
+            "preprocessed_chunks_deleted_after_phase_4": preprocessed_chunks_deleted,
+            "input_files_deleted_after_phase_6": input_files_deleted,
+            "work_dir_removed_after_phase_6": not args.keep_work,
+        },
         "aggregate_counts": dict(aggregate),
         "per_file_summary_paths": summary_paths,
     }
