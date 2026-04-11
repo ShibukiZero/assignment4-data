@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import gzip
 import json
+import random
 import shutil
 import subprocess
 import sys
@@ -33,8 +35,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--wet-count", type=int, default=5000, help="Number of WET files to process.")
     parser.add_argument("--bucket-size", type=int, default=50, help="Number of WET files per download/stage-1 bucket.")
     parser.add_argument("--download-concurrency", type=int, default=8, help="Concurrent WET downloads per bucket.")
+    parser.add_argument("--download-timeout", type=int, default=60, help="Downloader network timeout in seconds.")
+    parser.add_argument(
+        "--download-file-timeout",
+        type=int,
+        default=600,
+        help="Maximum wall-clock seconds allowed for one WET file download.",
+    )
+    parser.add_argument("--download-max-tries", type=int, default=3, help="Downloader retry count per file.")
+    parser.add_argument(
+        "--download-retry-wait",
+        type=int,
+        default=10,
+        help="Seconds to wait between downloader retries.",
+    )
+    parser.add_argument(
+        "--aria2-lowest-speed-limit",
+        default="50K",
+        help="aria2c lowest speed limit before retrying or failing a download.",
+    )
     parser.add_argument("--stage1-workers", type=int, default=24, help="Stage-1 worker processes.")
-    parser.add_argument("--stage2-workers", type=int, default=32, help="Stage-2 worker processes.")
+    parser.add_argument("--stage2-workers", type=int, default=40, help="Stage-2 worker processes.")
     parser.add_argument("--phase3-chunk-docs", type=int, default=1000, help="Stage-2 phase-3 documents per task.")
     parser.add_argument("--tokenize-batch-size", type=int, default=256, help="Tokenizer document batch size.")
     parser.add_argument("--tokenizer", default=DEFAULT_TOKENIZER, help="GPT-2 tokenizer path or model name.")
@@ -43,9 +64,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--review-chars", type=int, default=500, help="Preview characters for review logs.")
     parser.add_argument(
         "--selection",
-        choices=("first", "last"),
-        default="first",
+        choices=("first", "last", "random"),
+        default="random",
         help="Which WET paths to select from the crawl listing.",
+    )
+    parser.add_argument(
+        "--selection-seed",
+        type=int,
+        default=13,
+        help="Random seed used when --selection=random.",
     )
     parser.add_argument(
         "--keep-raw",
@@ -170,7 +197,7 @@ def download_crawl_listing(crawl_id: str, listing_gz_path: Path) -> list[str]:
         return [line.strip() for line in handle if line.strip()]
 
 
-def select_wet_paths(all_paths: list[str], count: int, selection: str) -> list[str]:
+def select_wet_paths(all_paths: list[str], count: int, selection: str, seed: int) -> list[str]:
     if count <= 0:
         raise ValueError("wet-count must be positive.")
     if count > len(all_paths):
@@ -179,13 +206,34 @@ def select_wet_paths(all_paths: list[str], count: int, selection: str) -> list[s
         return all_paths[:count]
     if selection == "last":
         return all_paths[-count:]
+    if selection == "random":
+        rng = random.Random(seed)
+        return rng.sample(all_paths, count)
     raise ValueError(f"Unsupported selection strategy: {selection}")
 
 
-def bucketed(paths: list[str], bucket_size: int) -> list[list[str]]:
+def ordered_wet_paths(all_paths: list[str], selection: str, seed: int) -> list[str]:
+    if selection == "first":
+        return list(all_paths)
+    if selection == "last":
+        return list(reversed(all_paths))
+    if selection == "random":
+        ordered_paths = list(all_paths)
+        rng = random.Random(seed)
+        rng.shuffle(ordered_paths)
+        return ordered_paths
+    raise ValueError(f"Unsupported selection strategy: {selection}")
+
+
+def bucket_targets(total_count: int, bucket_size: int) -> list[int]:
+    if total_count <= 0:
+        raise ValueError("wet-count must be positive.")
     if bucket_size <= 0:
         raise ValueError("bucket-size must be positive.")
-    return [paths[index : index + bucket_size] for index in range(0, len(paths), bucket_size)]
+    return [
+        min(bucket_size, total_count - index)
+        for index in range(0, total_count, bucket_size)
+    ]
 
 
 def write_lines(path: Path, lines: list[str]) -> None:
@@ -197,65 +245,290 @@ def wet_urls(relative_paths: list[str]) -> list[str]:
     return [f"https://data.commoncrawl.org/{relative_path}" for relative_path in relative_paths]
 
 
+def delete_partial_downloads(output_path: Path) -> int:
+    deleted_bytes = 0
+    for path in (output_path, Path(f"{output_path}.aria2")):
+        if path.exists():
+            deleted_bytes += path.stat().st_size
+            path.unlink()
+    return deleted_bytes
+
+
+def download_one_wet(
+    *,
+    relative_path: str,
+    raw_bucket_dir: Path,
+    download_timeout: int,
+    download_file_timeout: int,
+    download_max_tries: int,
+    download_retry_wait: int,
+    aria2_lowest_speed_limit: str,
+) -> dict[str, Any]:
+    url = wet_urls([relative_path])[0]
+    output_path = raw_bucket_dir / Path(relative_path).name
+
+    if shutil.which("aria2c"):
+        command = [
+            "aria2c",
+            "--continue=true",
+            "--split=8",
+            "--max-connection-per-server=8",
+            f"--connect-timeout={download_timeout}",
+            f"--timeout={download_timeout}",
+            f"--max-tries={download_max_tries}",
+            f"--retry-wait={download_retry_wait}",
+            f"--lowest-speed-limit={aria2_lowest_speed_limit}",
+            f"--dir={raw_bucket_dir}",
+            f"--out={output_path.name}",
+            url,
+        ]
+    elif shutil.which("wget"):
+        command = [
+            "wget",
+            f"--timeout={download_timeout}",
+            f"--read-timeout={download_timeout}",
+            f"--tries={download_max_tries}",
+            f"--waitretry={download_retry_wait}",
+            "-c",
+            "-P",
+            str(raw_bucket_dir),
+            url,
+        ]
+    else:
+        raise RuntimeError("Neither aria2c nor wget is available for downloading WET files.")
+
+    start = time.time()
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=download_file_timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        deleted_bytes = delete_partial_downloads(output_path)
+        return {
+            "relative_path": relative_path,
+            "url": url,
+            "output_path": str(output_path),
+            "status": "skipped",
+            "skip_reason": "timeout",
+            "elapsed_seconds": time.time() - start,
+            "deleted_partial_bytes": deleted_bytes,
+            "error": repr(exc),
+        }
+    except subprocess.CalledProcessError as exc:
+        deleted_bytes = delete_partial_downloads(output_path)
+        return {
+            "relative_path": relative_path,
+            "url": url,
+            "output_path": str(output_path),
+            "status": "skipped",
+            "skip_reason": "download_failed",
+            "elapsed_seconds": time.time() - start,
+            "deleted_partial_bytes": deleted_bytes,
+            "returncode": exc.returncode,
+            "stderr_tail": (exc.stderr or "")[-2000:],
+        }
+
+    if not output_path.exists() or output_path.stat().st_size == 0:
+        deleted_bytes = delete_partial_downloads(output_path)
+        return {
+            "relative_path": relative_path,
+            "url": url,
+            "output_path": str(output_path),
+            "status": "skipped",
+            "skip_reason": "missing_output",
+            "elapsed_seconds": time.time() - start,
+            "deleted_partial_bytes": deleted_bytes,
+            "returncode": completed.returncode,
+        }
+
+    return {
+        "relative_path": relative_path,
+        "url": url,
+        "output_path": str(output_path),
+        "status": "success",
+        "elapsed_seconds": time.time() - start,
+        "bytes": output_path.stat().st_size,
+    }
+
+
 def download_bucket(
     *,
     bucket_index: int,
-    bucket_paths: list[str],
+    candidate_paths: list[str],
+    target_count: int,
     raw_bucket_dir: Path,
     download_concurrency: int,
+    download_timeout: int,
+    download_file_timeout: int,
+    download_max_tries: int,
+    download_retry_wait: int,
+    aria2_lowest_speed_limit: str,
     events_path: Path,
     cwd: Path,
     skip_download: bool,
 ) -> dict[str, Any]:
     raw_bucket_dir.mkdir(parents=True, exist_ok=True)
-    paths_file = raw_bucket_dir / "wet_paths.txt"
-    urls_file = raw_bucket_dir / "wet_urls.txt"
-    write_lines(paths_file, bucket_paths)
-    write_lines(urls_file, wet_urls(bucket_paths))
+    successful_paths_file = raw_bucket_dir / "wet_paths.txt"
+    successful_urls_file = raw_bucket_dir / "wet_urls.txt"
+    attempted_paths_file = raw_bucket_dir / "attempted_wet_paths.txt"
+    skipped_path = raw_bucket_dir / "skipped_wet_paths.jsonl"
 
-    if not skip_download:
-        if shutil.which("aria2c"):
-            command = [
-                "aria2c",
-                "--continue=true",
-                f"--max-concurrent-downloads={download_concurrency}",
-                "--split=8",
-                "--max-connection-per-server=8",
-                f"--dir={raw_bucket_dir}",
-                f"--input-file={urls_file}",
-            ]
-        elif shutil.which("wget"):
-            command = [
-                "bash",
-                "-lc",
-                f"xargs -n 1 -P {download_concurrency} wget -c -P {raw_bucket_dir} < {urls_file}",
-            ]
-        else:
-            raise RuntimeError("Neither aria2c nor wget is available for downloading WET files.")
-        elapsed = run_command(
-            command,
-            cwd=cwd,
-            events_path=events_path,
-            event_name="bucket_download",
-            extra={"bucket_index": bucket_index, "raw_bucket_dir": str(raw_bucket_dir)},
-        )
-    else:
+    if target_count <= 0:
+        raise ValueError("target_count must be positive.")
+    if download_concurrency <= 0:
+        raise ValueError("download_concurrency must be positive.")
+
+    if skip_download:
+        existing_paths = sorted(raw_bucket_dir.glob("*.warc.wet.gz"))
+        existing_relative_paths = [path.name for path in existing_paths]
+        write_lines(successful_paths_file, existing_relative_paths)
+        write_lines(successful_urls_file, existing_relative_paths)
         append_event(
             events_path,
             "bucket_download_skipped",
             bucket_index=bucket_index,
             raw_bucket_dir=str(raw_bucket_dir),
+            existing_file_count=len(existing_paths),
         )
-        elapsed = 0.0
+        return {
+            "bucket_index": bucket_index,
+            "raw_bucket_dir": str(raw_bucket_dir),
+            "wet_paths_file": str(successful_paths_file),
+            "wet_urls_file": str(successful_urls_file),
+            "attempted_wet_paths_file": str(attempted_paths_file),
+            "skipped_wet_paths_file": str(skipped_path),
+            "download_elapsed_seconds": 0.0,
+            "attempted_count": 0,
+            "successful_wet_count": len(existing_paths),
+            "skipped_wet_count": 0,
+            "downloaded_file_count": file_count(raw_bucket_dir, "*.warc.wet.gz"),
+            "downloaded_bytes": directory_size_bytes(raw_bucket_dir),
+            "successful_wet_paths": existing_relative_paths,
+            "skipped_wet_paths": [],
+        }
+
+    append_event(
+        events_path,
+        "bucket_download_start",
+        bucket_index=bucket_index,
+        raw_bucket_dir=str(raw_bucket_dir),
+        target_count=target_count,
+    )
+    start = time.time()
+    candidate_index = 0
+    successful: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    futures: dict[concurrent.futures.Future[dict[str, Any]], str] = {}
+
+    def submit_next(executor: concurrent.futures.ThreadPoolExecutor) -> bool:
+        nonlocal candidate_index
+        if candidate_index >= len(candidate_paths):
+            return False
+        relative_path = candidate_paths[candidate_index]
+        candidate_index += 1
+        future = executor.submit(
+            download_one_wet,
+            relative_path=relative_path,
+            raw_bucket_dir=raw_bucket_dir,
+            download_timeout=download_timeout,
+            download_file_timeout=download_file_timeout,
+            download_max_tries=download_max_tries,
+            download_retry_wait=download_retry_wait,
+            aria2_lowest_speed_limit=aria2_lowest_speed_limit,
+        )
+        futures[future] = relative_path
+        return True
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=download_concurrency) as executor:
+        while len(futures) < download_concurrency and len(successful) + len(futures) < target_count:
+            if not submit_next(executor):
+                break
+
+        while len(successful) < target_count:
+            if not futures:
+                raise RuntimeError(
+                    f"Bucket {bucket_index} only downloaded {len(successful)} of {target_count} WET files."
+                )
+
+            done, _pending = concurrent.futures.wait(
+                futures,
+                return_when=concurrent.futures.FIRST_COMPLETED,
+            )
+            for future in done:
+                futures.pop(future)
+                result = future.result()
+                if result["status"] == "success":
+                    successful.append(result)
+                    append_event(
+                        events_path,
+                        "bucket_download_file_success",
+                        bucket_index=bucket_index,
+                        relative_path=result["relative_path"],
+                        bytes=result["bytes"],
+                        elapsed_seconds=result["elapsed_seconds"],
+                    )
+                else:
+                    skipped.append(result)
+                    append_event(
+                        events_path,
+                        "bucket_download_file_skipped",
+                        bucket_index=bucket_index,
+                        relative_path=result["relative_path"],
+                        skip_reason=result["skip_reason"],
+                        elapsed_seconds=result["elapsed_seconds"],
+                        deleted_partial_bytes=result.get("deleted_partial_bytes", 0),
+                    )
+
+            while len(futures) < download_concurrency and len(successful) + len(futures) < target_count:
+                if not submit_next(executor):
+                    break
+
+    successful_relative_paths = [entry["relative_path"] for entry in successful]
+    attempted_relative_paths = successful_relative_paths + [entry["relative_path"] for entry in skipped]
+    write_lines(successful_paths_file, successful_relative_paths)
+    write_lines(successful_urls_file, wet_urls(successful_relative_paths))
+    write_lines(attempted_paths_file, attempted_relative_paths)
+    if skipped:
+        with skipped_path.open("w", encoding="utf-8") as handle:
+            for entry in skipped:
+                handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    else:
+        skipped_path.write_text("", encoding="utf-8")
+
+    elapsed = time.time() - start
+    append_event(
+        events_path,
+        "bucket_download_end",
+        bucket_index=bucket_index,
+        raw_bucket_dir=str(raw_bucket_dir),
+        target_count=target_count,
+        successful_wet_count=len(successful),
+        skipped_wet_count=len(skipped),
+        attempted_count=len(attempted_relative_paths),
+        elapsed_seconds=elapsed,
+    )
 
     return {
         "bucket_index": bucket_index,
         "raw_bucket_dir": str(raw_bucket_dir),
-        "wet_paths_file": str(paths_file),
-        "wet_urls_file": str(urls_file),
+        "wet_paths_file": str(successful_paths_file),
+        "wet_urls_file": str(successful_urls_file),
+        "attempted_wet_paths_file": str(attempted_paths_file),
+        "skipped_wet_paths_file": str(skipped_path),
         "download_elapsed_seconds": elapsed,
+        "target_wet_count": target_count,
+        "attempted_count": len(attempted_relative_paths),
+        "successful_wet_count": len(successful),
+        "skipped_wet_count": len(skipped),
         "downloaded_file_count": file_count(raw_bucket_dir, "*.warc.wet.gz"),
         "downloaded_bytes": directory_size_bytes(raw_bucket_dir),
+        "successful_wet_paths": successful_relative_paths,
+        "skipped_wet_paths": skipped,
     }
 
 
@@ -294,7 +567,13 @@ def build_manifest(args: argparse.Namespace, run_dir: Path, cwd: Path) -> dict[s
         "wet_count": args.wet_count,
         "bucket_size": args.bucket_size,
         "selection": args.selection,
+        "selection_seed": args.selection_seed,
         "download_concurrency": args.download_concurrency,
+        "download_timeout": args.download_timeout,
+        "download_file_timeout": args.download_file_timeout,
+        "download_max_tries": args.download_max_tries,
+        "download_retry_wait": args.download_retry_wait,
+        "aria2_lowest_speed_limit": args.aria2_lowest_speed_limit,
         "stage1_workers": args.stage1_workers,
         "stage2_workers": args.stage2_workers,
         "phase3_chunk_docs": args.phase3_chunk_docs,
@@ -333,8 +612,15 @@ def main() -> None:
     cwd = Path.cwd()
     run_dir: Path = args.run_dir
 
-    if run_dir.exists() and any(run_dir.iterdir()) and not args.resume:
-        raise FileExistsError(f"Run directory is not empty. Use --resume if intended: {run_dir}")
+    allowed_precreated_paths = {"logs", "pipeline.pid"}
+    if run_dir.exists() and not args.resume:
+        unexpected_existing_paths = [
+            path for path in run_dir.iterdir() if path.name not in allowed_precreated_paths
+        ]
+        if unexpected_existing_paths:
+            raise FileExistsError(
+                f"Run directory is not empty. Use --resume if intended: {run_dir}"
+            )
     run_dir.mkdir(parents=True, exist_ok=True)
 
     events_path = run_dir / "events.jsonl"
@@ -353,44 +639,44 @@ def main() -> None:
     write_json(manifest_path, manifest)
     append_event(events_path, "run_start", manifest_path=str(manifest_path))
 
-    selected_paths_path = run_dir / "wet_paths.txt"
-    selected_urls_path = run_dir / "wet_urls.txt"
+    successful_paths_path = run_dir / "wet_paths.txt"
+    successful_urls_path = run_dir / "wet_urls.txt"
+    candidate_paths_path = run_dir / "candidate_wet_paths.txt"
     listing_gz_path = run_dir / "wet.paths.gz"
-    if selected_paths_path.exists():
-        selected_paths = [
+    if candidate_paths_path.exists():
+        candidate_paths = [
             line.strip()
-            for line in selected_paths_path.read_text(encoding="utf-8").splitlines()
+            for line in candidate_paths_path.read_text(encoding="utf-8").splitlines()
             if line.strip()
         ]
-        if not selected_urls_path.exists():
-            write_lines(selected_urls_path, wet_urls(selected_paths))
         append_event(
             events_path,
-            "wet_paths_reused",
-            wet_paths_file=str(selected_paths_path),
-            count=len(selected_paths),
+            "candidate_wet_paths_reused",
+            candidate_wet_paths_file=str(candidate_paths_path),
+            count=len(candidate_paths),
         )
     else:
         append_event(events_path, "wet_listing_download_start", crawl_id=args.crawl_id)
         all_paths = download_crawl_listing(args.crawl_id, listing_gz_path)
-        selected_paths = select_wet_paths(all_paths, args.wet_count, args.selection)
-        write_lines(selected_paths_path, selected_paths)
-        write_lines(selected_urls_path, wet_urls(selected_paths))
+        candidate_paths = ordered_wet_paths(all_paths, args.selection, args.selection_seed)
+        write_lines(candidate_paths_path, candidate_paths)
         append_event(
             events_path,
             "wet_listing_download_end",
             listing_gz_path=str(listing_gz_path),
-            wet_paths_file=str(selected_paths_path),
-            wet_urls_file=str(selected_urls_path),
-            selected_count=len(selected_paths),
+            candidate_wet_paths_file=str(candidate_paths_path),
+            candidate_count=len(candidate_paths),
+            target_successful_wet_count=args.wet_count,
         )
 
-    bucket_paths_list = bucketed(selected_paths, args.bucket_size)
+    target_counts_by_bucket = bucket_targets(args.wet_count, args.bucket_size)
+    candidate_cursor = 0
+    successful_run_paths: list[str] = []
     stage1_bucket_summary_paths: list[Path] = []
     bucket_summary_paths: list[Path] = []
 
     if not args.skip_stage1:
-        for bucket_index, bucket_paths in enumerate(bucket_paths_list):
+        for bucket_index, target_count in enumerate(target_counts_by_bucket):
             bucket_summary_path = bucket_summary_dir / f"bucket_{bucket_index:05d}.json"
             stage1_bucket_output_dir = stage1_bucket_dir / f"bucket_{bucket_index:05d}"
             stage1_summary_path = stage1_bucket_output_dir / "aggregate_summary.json"
@@ -401,6 +687,8 @@ def main() -> None:
                     append_event(events_path, "bucket_skipped_existing_success", bucket_index=bucket_index)
                     bucket_summary_paths.append(bucket_summary_path)
                     stage1_bucket_summary_paths.append(stage1_summary_path)
+                    successful_run_paths.extend(bucket_summary.get("successful_wet_paths", []))
+                    candidate_cursor += int(bucket_summary.get("attempted_count", target_count))
                     continue
 
             raw_bucket_dir = raw_dir / f"bucket_{bucket_index:05d}"
@@ -408,22 +696,30 @@ def main() -> None:
                 "bucket_index": bucket_index,
                 "status": "started",
                 "started_at": utc_now(),
-                "wet_path_count": len(bucket_paths),
+                "target_wet_count": target_count,
                 "raw_bucket_dir": str(raw_bucket_dir),
                 "stage1_output_dir": str(stage1_bucket_output_dir),
             }
             write_json(bucket_summary_path, bucket_record)
-            append_event(events_path, "bucket_start", bucket_index=bucket_index, wet_path_count=len(bucket_paths))
+            append_event(events_path, "bucket_start", bucket_index=bucket_index, target_wet_count=target_count)
 
             download_summary = download_bucket(
                 bucket_index=bucket_index,
-                bucket_paths=bucket_paths,
+                candidate_paths=candidate_paths[candidate_cursor:],
+                target_count=target_count,
                 raw_bucket_dir=raw_bucket_dir,
                 download_concurrency=args.download_concurrency,
+                download_timeout=args.download_timeout,
+                download_file_timeout=args.download_file_timeout,
+                download_max_tries=args.download_max_tries,
+                download_retry_wait=args.download_retry_wait,
+                aria2_lowest_speed_limit=args.aria2_lowest_speed_limit,
                 events_path=events_path,
                 cwd=cwd,
                 skip_download=args.skip_download,
             )
+            candidate_cursor += int(download_summary["attempted_count"])
+            successful_run_paths.extend(download_summary["successful_wet_paths"])
             bucket_record.update(download_summary)
             write_json(bucket_summary_path, bucket_record)
 
@@ -497,7 +793,21 @@ def main() -> None:
     else:
         stage1_bucket_summary_paths = sorted(stage1_bucket_dir.glob("bucket_*/aggregate_summary.json"))
         bucket_summary_paths = sorted(bucket_summary_dir.glob("bucket_*.json"))
+        for bucket_summary_path in bucket_summary_paths:
+            bucket_summary = read_json(bucket_summary_path)
+            successful_run_paths.extend(bucket_summary.get("successful_wet_paths", []))
         append_event(events_path, "stage1_skipped", stage1_bucket_summary_count=len(stage1_bucket_summary_paths))
+
+    write_lines(successful_paths_path, successful_run_paths)
+    write_lines(successful_urls_path, wet_urls(successful_run_paths))
+    append_event(
+        events_path,
+        "successful_wet_paths_written",
+        wet_paths_file=str(successful_paths_path),
+        wet_urls_file=str(successful_urls_path),
+        successful_wet_count=len(successful_run_paths),
+        attempted_candidate_count=candidate_cursor,
+    )
 
     stage1_rollup_path = stage1_dir / "aggregate_summary.json"
     stage1_rollup = write_stage1_rollup(stage1_bucket_summary_paths, stage1_rollup_path)
@@ -564,8 +874,11 @@ def main() -> None:
         "total_elapsed_seconds": time.time() - run_start,
         "manifest_path": str(manifest_path),
         "events_path": str(events_path),
-        "wet_paths_file": str(selected_paths_path),
-        "wet_urls_file": str(selected_urls_path),
+        "candidate_wet_paths_file": str(candidate_paths_path),
+        "wet_paths_file": str(successful_paths_path),
+        "wet_urls_file": str(successful_urls_path),
+        "successful_wet_count": len(successful_run_paths),
+        "attempted_candidate_count": candidate_cursor,
         "bucket_summary_paths": [str(path) for path in bucket_summary_paths],
         "stage1_rollup_path": str(stage1_rollup_path),
         "stage1_rollup": stage1_rollup,
