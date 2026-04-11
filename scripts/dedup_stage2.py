@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import glob
+import hashlib
 import json
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -11,8 +12,8 @@ import time
 from xopen import xopen
 
 from cs336_data.deduplication import (
+    MAX_HASH_VALUE,
     candidate_duplicate_pairs,
-    compute_minhash_signature,
     document_word_ngrams,
     find_root,
     hash_line,
@@ -81,6 +82,12 @@ def parse_args() -> argparse.Namespace:
         default=8,
         help="Number of worker processes for parallelizable stage-2 phases.",
     )
+    parser.add_argument(
+        "--phase3-chunk-docs",
+        type=int,
+        default=1000,
+        help="Number of exact-stage documents per phase-3 preprocessing task.",
+    )
     return parser.parse_args()
 
 
@@ -139,6 +146,51 @@ def similar_pairs_in_chunk(pair_chunk: list[tuple[int, int]]) -> list[tuple[int,
     return confirmed_pairs
 
 
+def normalized_text_ngram_payloads(normalized_text: str, ngrams: int) -> list[bytes]:
+    """Return the exact n-gram payload strings used by Chapter 3 MinHashing."""
+
+    words = normalized_text.split()
+    if not words:
+        return []
+
+    if len(words) < ngrams:
+        return [" ".join(words).encode("utf-8")]
+
+    # Chapter 3 hashes a set of word n-gram tuples. Using a set of joined
+    # strings is equivalent here because normalized tokens cannot contain
+    # whitespace.
+    return [
+        ngram_text.encode("utf-8")
+        for ngram_text in {
+            " ".join(words[index : index + ngrams])
+            for index in range(len(words) - ngrams + 1)
+        }
+    ]
+
+
+def compute_minhash_signature_from_payloads(
+    ngram_payloads: list[bytes],
+    seed_prefixes: list[bytes],
+) -> tuple[int, ...]:
+    """Compute the same signature as Chapter 3 with less repeated string work."""
+
+    if not ngram_payloads:
+        return tuple(MAX_HASH_VALUE for _ in seed_prefixes)
+
+    signature: list[int] = []
+    for seed_prefix in seed_prefixes:
+        min_hash = min(
+            int.from_bytes(
+                hashlib.blake2b(seed_prefix + ngram_payload, digest_size=8).digest(),
+                byteorder="big",
+                signed=False,
+            )
+            for ngram_payload in ngram_payloads
+        )
+        signature.append(min_hash)
+    return tuple(signature)
+
+
 def count_line_hashes_for_stage1_file(
     input_path: str,
 ) -> tuple[str, dict[str, int], Counter[bytes]]:
@@ -163,19 +215,23 @@ def preprocess_exact_stage_file(
     preprocessed_path: str,
     ngrams: int,
     num_hashes: int,
+    source_name: str | None = None,
 ) -> tuple[str, dict[str, int]]:
     exact_stage_path_obj = Path(exact_stage_path)
     preprocessed_path_obj = Path(preprocessed_path)
-    source_name = exact_stage_path_obj.name
+    source_name = source_name or exact_stage_path_obj.name
     counts = Counter()
+    seed_prefixes = [f"{seed}\x1f".encode("utf-8") for seed in range(num_hashes)]
 
     with xopen(exact_stage_path_obj, "rt") as source, xopen(preprocessed_path_obj, "wt") as sink:
         for line in source:
             entry = json.loads(line)
             exact_text = entry["exact_text"]
             normalized_text = normalize_document_for_deduplication(exact_text)
-            ngram_set = document_word_ngrams(normalized_text, ngrams)
-            signature = list(compute_minhash_signature(ngram_set, num_hashes))
+            ngram_payloads = normalized_text_ngram_payloads(normalized_text, ngrams)
+            signature = list(
+                compute_minhash_signature_from_payloads(ngram_payloads, seed_prefixes)
+            )
 
             sink.write(
                 json.dumps(
@@ -193,11 +249,54 @@ def preprocess_exact_stage_file(
     return source_name, dict(counts)
 
 
+def split_exact_stage_into_chunks(
+    exact_stage_path: Path,
+    chunk_dir: Path,
+    chunk_docs: int,
+) -> list[tuple[Path, str]]:
+    source_name = exact_stage_path.name
+    chunk_tasks: list[tuple[Path, str]] = []
+    chunk_index = 0
+    docs_in_chunk = 0
+    chunk_handle = None
+
+    def open_chunk() -> tuple[Path, object]:
+        chunk_path = chunk_dir / f"{source_name}.chunk_{chunk_index:05d}.jsonl"
+        return chunk_path, xopen(chunk_path, "wt")
+
+    try:
+        with xopen(exact_stage_path, "rt") as source:
+            current_chunk_path: Path | None = None
+            for line in source:
+                if chunk_handle is None:
+                    current_chunk_path, chunk_handle = open_chunk()
+
+                chunk_handle.write(line)
+                docs_in_chunk += 1
+
+                if docs_in_chunk >= chunk_docs:
+                    chunk_handle.close()
+                    chunk_tasks.append((current_chunk_path, source_name))
+                    chunk_index += 1
+                    docs_in_chunk = 0
+                    chunk_handle = None
+
+            if chunk_handle is not None:
+                chunk_handle.close()
+                chunk_tasks.append((current_chunk_path, source_name))
+    finally:
+        if chunk_handle is not None and not chunk_handle.closed:
+            chunk_handle.close()
+
+    return chunk_tasks
+
+
 def source_output_paths(output_dir: Path, source_name: str) -> tuple[Path, Path, Path]:
+    summary_name = f"{source_name.removesuffix('.jsonl')}.json"
     return (
         output_dir / "deduped_docs" / source_name,
         output_dir / "review_logs" / source_name,
-        output_dir / "summaries" / f"{source_name}.json",
+        output_dir / "summaries" / summary_name,
     )
 
 
@@ -231,7 +330,8 @@ def ensure_output_layout(output_dir: Path) -> dict[str, Path]:
         "review_logs": output_dir / "review_logs",
         "summaries": output_dir / "summaries",
         "exact_stage": output_dir / "_work" / "exact_stage",
-        "preprocessed_stage": output_dir / "_work" / "preprocessed_stage",
+        "exact_chunks": output_dir / "_work" / "exact_chunks",
+        "preprocessed_chunks": output_dir / "_work" / "preprocessed_chunks",
     }
     for path in layout.values():
         path.mkdir(parents=True, exist_ok=True)
@@ -246,6 +346,8 @@ def main() -> None:
         raise ValueError("num_hashes, num_bands, and ngrams must be positive.")
     if args.num_hashes % args.num_bands != 0:
         raise ValueError("num_hashes must be evenly divisible by num_bands.")
+    if args.phase3_chunk_docs <= 0:
+        raise ValueError("phase3_chunk_docs must be positive.")
 
     input_paths = sorted(Path(path) for path in glob.glob(args.input_glob))
     if not input_paths:
@@ -343,21 +445,33 @@ def main() -> None:
 
     # Phase 3: parallel normalization + signature computation on exact-surviving docs.
     phase_start = time.time()
-    preprocessed_stage_paths = [
-        layout["preprocessed_stage"] / path.name for path in exact_stage_paths
+    exact_chunk_tasks: list[tuple[Path, str]] = []
+    for exact_stage_path in exact_stage_paths:
+        exact_chunk_tasks.extend(
+            split_exact_stage_into_chunks(
+                exact_stage_path,
+                layout["exact_chunks"],
+                args.phase3_chunk_docs,
+            )
+        )
+
+    preprocessed_chunk_paths = [
+        layout["preprocessed_chunks"] / chunk_path.name
+        for chunk_path, _source_name in exact_chunk_tasks
     ]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [
             executor.submit(
                 preprocess_exact_stage_file,
-                str(exact_stage_path),
-                str(preprocessed_stage_path),
+                str(exact_chunk_path),
+                str(preprocessed_chunk_path),
                 args.ngrams,
                 args.num_hashes,
+                source_name,
             )
-            for exact_stage_path, preprocessed_stage_path in zip(
-                exact_stage_paths,
-                preprocessed_stage_paths,
+            for (exact_chunk_path, source_name), preprocessed_chunk_path in zip(
+                exact_chunk_tasks,
+                preprocessed_chunk_paths,
                 strict=True,
             )
         ]
@@ -372,13 +486,17 @@ def main() -> None:
     fuzzy_global_doc_indices: list[int] = []
     fuzzy_signatures: list[tuple[int, ...]] = []
     fuzzy_normalized_texts: list[str] = []
-    for preprocessed_stage_path in preprocessed_stage_paths:
-        with xopen(preprocessed_stage_path, "rt") as handle:
+    preprocessed_entries: list[dict] = []
+    for preprocessed_chunk_path in preprocessed_chunk_paths:
+        with xopen(preprocessed_chunk_path, "rt") as handle:
             for line in handle:
-                entry = json.loads(line)
-                fuzzy_global_doc_indices.append(entry["global_doc_index"])
-                fuzzy_signatures.append(tuple(entry["signature"]))
-                fuzzy_normalized_texts.append(entry["normalized_text"])
+                preprocessed_entries.append(json.loads(line))
+
+    preprocessed_entries.sort(key=lambda entry: entry["global_doc_index"])
+    for entry in preprocessed_entries:
+        fuzzy_global_doc_indices.append(entry["global_doc_index"])
+        fuzzy_signatures.append(tuple(entry["signature"]))
+        fuzzy_normalized_texts.append(entry["normalized_text"])
 
     candidate_pairs = candidate_duplicate_pairs(fuzzy_signatures, args.num_bands)
     aggregate["minhash_candidate_pairs"] = len(candidate_pairs)
@@ -489,6 +607,7 @@ def main() -> None:
         "jaccard_threshold": args.jaccard_threshold,
         "review_chars": args.review_chars,
         "workers": worker_count,
+        "phase3_chunk_docs": args.phase3_chunk_docs,
         "total_elapsed_seconds": time.time() - total_start,
         "phase_elapsed_seconds": phase_elapsed_seconds,
         "aggregate_counts": dict(aggregate),
