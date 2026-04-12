@@ -163,7 +163,9 @@ The deduplication stage then processed the `9,080,206` stage-1 kept documents. E
 
 **Deliverable:** Runtime of the data filtering pipeline.
 
-**Answer:** TODO
+**Answer:** Excluding Common Crawl download time, filtering the 5,000 WET files took about `33,688.90` seconds, or `9.36` hours, on our self-hosted server. Stage 1, which applied the document-level WET filters bucket by bucket with `24` workers, took `13,203.16` seconds (`3.67` hours) of summed bucket filtering time. Stage 2, which performed global exact-line deduplication and MinHash/LSH near-deduplication, took `20,485.74` seconds (`5.69` hours) with `40` workers. The stage-2 runtime was dominated by MinHash signature preprocessing, which took `17,672.26` seconds (`4.91` hours); LSH candidate generation took another `1,484.43` seconds (`0.41` hours), while the remaining exact-dedup and write-back phases were much smaller.
+
+A simple linear extrapolation from `5,000` to `100,000` WET files multiplies the observed filtering time by `20`, giving about `187.16` hours, or `7.80` days, on similar hardware with the same staged pipeline. We treat this as an order-of-magnitude estimate rather than a guaranteed wall-clock schedule, because our self-hosted download time is network-dependent and not included here, and because larger runs may shift the bottleneck between CPU, memory, and disk I/O.
 
 ---
 
