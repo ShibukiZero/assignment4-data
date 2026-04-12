@@ -16,6 +16,7 @@ TRAIN_STEPS="${TRAIN_STEPS:-100000}"
 EVAL_INTERVAL="${EVAL_INTERVAL:-2000}"
 SHUTDOWN_ON_SUCCESS="${SHUTDOWN_ON_SUCCESS:-0}"
 SHUTDOWN_DELAY_SECONDS="${SHUTDOWN_DELAY_SECONDS:-60}"
+UV_RUN_NO_SYNC="${UV_RUN_NO_SYNC:-0}"
 
 require_file() {
   local path="$1"
@@ -47,6 +48,7 @@ echo "Artifact dir: $ARTIFACT_DIR"
 echo "Train steps: $TRAIN_STEPS"
 echo "Eval interval: $EVAL_INTERVAL"
 echo "Shutdown on success: $SHUTDOWN_ON_SUCCESS"
+echo "UV run no-sync: $UV_RUN_NO_SYNC"
 echo "Extra Hydra overrides: $*"
 
 {
@@ -63,6 +65,7 @@ echo "Extra Hydra overrides: $*"
   echo "train_steps=$TRAIN_STEPS"
   echo "eval_interval=$EVAL_INTERVAL"
   echo "shutdown_on_success=$SHUTDOWN_ON_SUCCESS"
+  echo "uv_run_no_sync=$UV_RUN_NO_SYNC"
   echo "git_commit=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || true)"
   echo "git_branch=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
   echo "extra_hydra_overrides=$*"
@@ -70,16 +73,22 @@ echo "Extra Hydra overrides: $*"
 
 cd "$BASICS_DIR"
 
+uv_run_args=(--project "$REPO_ROOT" --directory "$BASICS_DIR")
+if [[ "$UV_RUN_NO_SYNC" == "1" ]]; then
+  uv_run_args+=(--no-sync)
+fi
+
 hydra_overrides=(
   "paths.train_bin=$TRAIN_BIN"
   "paths.valid_bin=$VALID_BIN"
   "paths.model_output=$MODEL_OUTPUT"
-  "training.train_steps=$TRAIN_STEPS"
-  "training.eval_interval=$EVAL_INTERVAL"
+  "+training.train_steps=$TRAIN_STEPS"
+  "+training.eval_interval=$EVAL_INTERVAL"
 )
 
 set +e
-uv run torchrun --standalone --nproc_per_node="$NPROC_PER_NODE" \
+uv run "${uv_run_args[@]}" \
+  torchrun --standalone --nproc_per_node="$NPROC_PER_NODE" \
   scripts/train.py \
   --config-name=experiment/your_data \
   "${hydra_overrides[@]}" \
@@ -109,7 +118,7 @@ require_file "$MODEL_OUTPUT/model.pt" "final model checkpoint"
 require_file "$MODEL_OUTPUT/model_config.json" "model config"
 require_file "$LOG_PATH" "training log"
 
-uv run python "$REPO_ROOT/scripts/summarize_training_log.py" "$LOG_PATH" \
+uv run "${uv_run_args[@]}" python "$REPO_ROOT/scripts/summarize_training_log.py" "$LOG_PATH" \
   --eval-interval "$EVAL_INTERVAL" \
   --train-steps "$TRAIN_STEPS" \
   --output-json "$ARTIFACT_DIR/validation_curve.json" \
