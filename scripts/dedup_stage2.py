@@ -44,8 +44,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--input-glob",
-        required=True,
-        help="Glob pattern for stage-1 kept-doc JSONL files.",
+        help=(
+            "Glob pattern for stage-1 kept-doc JSONL files. Required unless "
+            "--resume-from-exact-docs is used."
+        ),
     )
     parser.add_argument(
         "--output-dir",
@@ -130,6 +132,15 @@ def parse_args() -> argparse.Namespace:
             "Delete each input stage-1 kept-doc file after its exact-deduplicated "
             "stage-2 checkpoint has been written. This is intended for disk-constrained "
             "full-pipeline runs."
+        ),
+    )
+    parser.add_argument(
+        "--resume-from-exact-docs",
+        action="store_true",
+        help=(
+            "Resume from an existing phase-2 exact-deduplicated checkpoint in "
+            "OUTPUT_DIR/_work/exact_docs. This reruns phases 3-6 and is intended "
+            "for failures before phase 6 started."
         ),
     )
     return parser.parse_args()
@@ -567,7 +578,8 @@ def write_final_outputs_for_exact_stage_file(
     output_dir: str,
     global_doc_offset: int,
     review_chars: int,
-) -> tuple[str, dict[str, int]]:
+    delete_input_after_write: bool,
+) -> tuple[str, dict[str, int], bool]:
     input_path_obj = Path(input_path)
     output_dir_obj = Path(output_dir)
     source_name = input_path_obj.name
@@ -613,7 +625,12 @@ def write_final_outputs_for_exact_stage_file(
             deduped_sink.write(json.dumps(kept_payload, ensure_ascii=False) + "\n")
             counts["decision_keep"] += 1
 
-    return source_name, dict(counts)
+    input_deleted = False
+    if delete_input_after_write:
+        input_path_obj.unlink()
+        input_deleted = True
+
+    return source_name, dict(counts), input_deleted
 
 
 def source_output_paths(output_dir: Path, source_name: str) -> tuple[Path, Path, Path]:
@@ -665,6 +682,112 @@ def ensure_output_layout(output_dir: Path) -> dict[str, Path]:
     return layout
 
 
+def exact_stage_manifest_path(output_dir: Path) -> Path:
+    return output_dir / "_work" / "exact_stage_manifest.json"
+
+
+def write_exact_stage_manifest(
+    *,
+    output_dir: Path,
+    input_glob: str | None,
+    input_paths: list[Path],
+    exact_doc_paths: list[Path],
+    global_doc_offsets: dict[str, int],
+    source_counts: dict[str, Counter],
+    aggregate: Counter,
+    phase_elapsed_seconds: dict[str, float],
+    raw_line_hash_instances_indexed: int,
+    duplicate_line_hash_count: int,
+    exact_bucket_workers: int,
+    args: argparse.Namespace,
+    stage1_input_files_deleted: int,
+) -> None:
+    manifest = {
+        "input_glob": input_glob,
+        "input_paths": [str(path) for path in input_paths],
+        "exact_doc_paths": [str(path) for path in exact_doc_paths],
+        "global_doc_offsets": global_doc_offsets,
+        "source_counts": {
+            source_name: dict(counts) for source_name, counts in source_counts.items()
+        },
+        "aggregate_counts": dict(aggregate),
+        "phase_elapsed_seconds": dict(phase_elapsed_seconds),
+        "exact_line_index": {
+            "raw_line_hash_instances_indexed": raw_line_hash_instances_indexed,
+            "duplicate_line_hashes": duplicate_line_hash_count,
+        },
+        "exact_hash_buckets": args.exact_hash_buckets,
+        "exact_bucket_workers": exact_bucket_workers,
+        "exact_bucket_cache_size": args.exact_bucket_cache_size,
+        "stage1_input_files_deleted_after_phase_2": stage1_input_files_deleted,
+    }
+    manifest_path = exact_stage_manifest_path(output_dir)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+
+
+def load_exact_stage_manifest(
+    output_dir: Path,
+) -> tuple[
+    str | None,
+    list[Path],
+    list[Path],
+    dict[str, int],
+    defaultdict[str, Counter],
+    Counter,
+    dict[str, float],
+    int,
+    int,
+    int,
+    int,
+]:
+    manifest_path = exact_stage_manifest_path(output_dir)
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Missing exact-stage manifest: {manifest_path}")
+
+    manifest = json.loads(manifest_path.read_text())
+    input_paths = [Path(path) for path in manifest["input_paths"]]
+    exact_doc_paths = [Path(path) for path in manifest["exact_doc_paths"]]
+    missing_exact_docs = [str(path) for path in exact_doc_paths if not path.exists()]
+    if missing_exact_docs:
+        raise FileNotFoundError(
+            "Cannot resume because exact checkpoint files are missing: "
+            + ", ".join(missing_exact_docs[:10])
+        )
+
+    source_counts: defaultdict[str, Counter] = defaultdict(Counter)
+    for source_name, counts in manifest["source_counts"].items():
+        source_counts[source_name].update(counts)
+
+    exact_line_index = manifest.get("exact_line_index", {})
+    return (
+        manifest.get("input_glob"),
+        input_paths,
+        exact_doc_paths,
+        {source_name: int(offset) for source_name, offset in manifest["global_doc_offsets"].items()},
+        source_counts,
+        Counter(manifest["aggregate_counts"]),
+        dict(manifest.get("phase_elapsed_seconds", {})),
+        int(exact_line_index.get("raw_line_hash_instances_indexed", 0)),
+        int(exact_line_index.get("duplicate_line_hashes", 0)),
+        int(manifest.get("exact_bucket_workers", 0)),
+        int(manifest.get("stage1_input_files_deleted_after_phase_2", 0)),
+    )
+
+
+def prepare_resume_from_exact_docs(layout: dict[str, Path]) -> None:
+    if any(layout["deduped_docs"].glob("*.jsonl")):
+        raise RuntimeError(
+            "Refusing to resume because deduped_docs already contains outputs. "
+            "This lightweight resume mode only supports failures before phase 6 started."
+        )
+
+    for key in ("preprocessed_chunks", "summaries"):
+        if layout[key].exists():
+            shutil.rmtree(layout[key])
+        layout[key].mkdir(parents=True, exist_ok=True)
+
+
 def main() -> None:
     args = parse_args()
     total_start = time.time()
@@ -682,140 +805,184 @@ def main() -> None:
     if args.exact_bucket_cache_size <= 0:
         raise ValueError("exact_bucket_cache_size must be positive.")
 
-    input_paths = sorted(Path(path) for path in glob.glob(args.input_glob))
-    if not input_paths:
-        raise FileNotFoundError(
-            f"No stage-1 kept-doc files matched input glob: {args.input_glob}"
-        )
-
     output_dir = Path(args.output_dir)
-    if output_dir.exists() and any(output_dir.iterdir()):
+    if output_dir.exists() and any(output_dir.iterdir()) and not args.resume_from_exact_docs:
         raise FileExistsError(
             f"Output directory must be empty for a clean stage-2 run: {output_dir}"
         )
     output_dir.mkdir(parents=True, exist_ok=True)
     layout = ensure_output_layout(output_dir)
 
-    aggregate = Counter()
-    source_counts: dict[str, Counter] = defaultdict(Counter)
-    worker_count = min(args.workers, len(input_paths))
-    phase_elapsed_seconds: dict[str, float] = {}
-    log_progress(
-        f"starting stage 2 with {len(input_paths)} input files, "
-        f"{worker_count} document workers, {args.exact_hash_buckets} exact-hash buckets"
-    )
-
-    # Phase 1a: stream line hashes to disk buckets. Returning one giant Counter
-    # per worker does not scale to the full 5000-WET run.
-    log_progress("phase 1a start: writing exact-line hash bucket shards")
-    phase_start = time.time()
-    shard_dirs: list[str] = []
-    input_path_chunks = chunked_paths(input_paths, worker_count)
-    with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
-        futures = [
-            executor.submit(
-                write_line_hash_bucket_shard,
-                [str(input_path) for input_path in input_path_chunk],
-                shard_id,
-                str(layout["line_hash_shards"]),
-                args.exact_hash_buckets,
+    if args.resume_from_exact_docs:
+        (
+            input_glob,
+            input_paths,
+            exact_doc_paths,
+            global_doc_offsets,
+            source_counts,
+            aggregate,
+            phase_elapsed_seconds,
+            raw_line_hash_instances_indexed,
+            duplicate_line_hash_count,
+            exact_bucket_workers,
+            stage1_input_files_deleted,
+        ) = load_exact_stage_manifest(output_dir)
+        prepare_resume_from_exact_docs(layout)
+        worker_count = min(args.workers, len(exact_doc_paths))
+        log_progress(
+            "resuming stage 2 from exact checkpoint with "
+            f"{len(exact_doc_paths)} exact-doc files and {worker_count} workers"
+        )
+    else:
+        if not args.input_glob:
+            raise ValueError("--input-glob is required unless --resume-from-exact-docs is used.")
+        input_glob = args.input_glob
+        input_paths = sorted(Path(path) for path in glob.glob(args.input_glob))
+        if not input_paths:
+            raise FileNotFoundError(
+                f"No stage-1 kept-doc files matched input glob: {args.input_glob}"
             )
-            for shard_id, input_path_chunk in enumerate(input_path_chunks)
-        ]
-        for future in concurrent.futures.as_completed(futures):
-            shard_dir, shard_source_counts = future.result()
-            shard_dirs.append(shard_dir)
-            for source_name, counts in shard_source_counts.items():
+
+        aggregate = Counter()
+        source_counts = defaultdict(Counter)
+        worker_count = min(args.workers, len(input_paths))
+        phase_elapsed_seconds = {}
+        log_progress(
+            f"starting stage 2 with {len(input_paths)} input files, "
+            f"{worker_count} document workers, {args.exact_hash_buckets} exact-hash buckets"
+        )
+
+        # Phase 1a: stream line hashes to disk buckets. Returning one giant Counter
+        # per worker does not scale to the full 5000-WET run.
+        log_progress("phase 1a start: writing exact-line hash bucket shards")
+        phase_start = time.time()
+        shard_dirs: list[str] = []
+        input_path_chunks = chunked_paths(input_paths, worker_count)
+        with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
+            futures = [
+                executor.submit(
+                    write_line_hash_bucket_shard,
+                    [str(input_path) for input_path in input_path_chunk],
+                    shard_id,
+                    str(layout["line_hash_shards"]),
+                    args.exact_hash_buckets,
+                )
+                for shard_id, input_path_chunk in enumerate(input_path_chunks)
+            ]
+            for future in concurrent.futures.as_completed(futures):
+                shard_dir, shard_source_counts = future.result()
+                shard_dirs.append(shard_dir)
+                for source_name, counts in shard_source_counts.items():
+                    aggregate.update(counts)
+                    source_counts[source_name].update(counts)
+        phase_elapsed_seconds["phase_1a_line_hash_bucket_sharding"] = (
+            time.time() - phase_start
+        )
+        log_progress(
+            "phase 1a complete: "
+            f"{aggregate['line_instances_seen']} line instances bucketed in "
+            f"{phase_elapsed_seconds['phase_1a_line_hash_bucket_sharding']:.3f}s"
+        )
+
+        # Phase 1b: build the exact duplicate-hash index one bucket at a time so the
+        # peak Counter size is bounded by a bucket, not by the full corpus.
+        log_progress("phase 1b start: building duplicate line-hash bucket index")
+        phase_start = time.time()
+        exact_bucket_workers = min(args.exact_bucket_workers, args.exact_hash_buckets)
+        duplicate_line_hash_count = 0
+        raw_line_hash_instances_indexed = 0
+        with concurrent.futures.ProcessPoolExecutor(max_workers=exact_bucket_workers) as executor:
+            futures = [
+                executor.submit(
+                    build_duplicate_line_hash_bucket,
+                    bucket_id,
+                    shard_dirs,
+                    str(layout["duplicate_line_hashes"]),
+                    not args.keep_work,
+                )
+                for bucket_id in range(args.exact_hash_buckets)
+            ]
+            for future in concurrent.futures.as_completed(futures):
+                _bucket_id, bucket_instances, bucket_duplicate_hashes = future.result()
+                raw_line_hash_instances_indexed += bucket_instances
+                duplicate_line_hash_count += bucket_duplicate_hashes
+
+        if not args.keep_work and layout["line_hash_shards"].exists():
+            shutil.rmtree(layout["line_hash_shards"])
+        phase_elapsed_seconds["phase_1b_duplicate_line_hash_index"] = (
+            time.time() - phase_start
+        )
+        log_progress(
+            "phase 1b complete: "
+            f"{raw_line_hash_instances_indexed} line-hash instances indexed, "
+            f"{duplicate_line_hash_count} duplicate hashes retained in "
+            f"{phase_elapsed_seconds['phase_1b_duplicate_line_hash_index']:.3f}s"
+        )
+
+        # Phase 2: materialize the globally exact-deduplicated checkpoint. After
+        # this finishes, downstream phases no longer need the large stage-1 inputs.
+        log_progress("phase 2 start: materializing exact-line dedup checkpoint")
+        phase_start = time.time()
+        stage1_input_files_deleted = 0
+        exact_doc_path_by_source: dict[str, Path] = {}
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=worker_count,
+            initializer=init_exact_worker,
+            initargs=(
+                str(layout["duplicate_line_hashes"]),
+                args.exact_hash_buckets,
+                args.exact_bucket_cache_size,
+            ),
+        ) as executor:
+            futures = [
+                executor.submit(
+                    materialize_exact_stage_for_stage1_file,
+                    str(input_path),
+                    str(layout["exact_docs"]),
+                    str(layout["review_logs"]),
+                    args.review_chars,
+                    args.delete_input_after_write,
+                )
+                for input_path in input_paths
+            ]
+            for future in concurrent.futures.as_completed(futures):
+                source_name, counts, input_deleted, exact_doc_path = future.result()
                 aggregate.update(counts)
                 source_counts[source_name].update(counts)
-    phase_elapsed_seconds["phase_1a_line_hash_bucket_sharding"] = time.time() - phase_start
-    log_progress(
-        "phase 1a complete: "
-        f"{aggregate['line_instances_seen']} line instances bucketed in "
-        f"{phase_elapsed_seconds['phase_1a_line_hash_bucket_sharding']:.3f}s"
-    )
+                exact_doc_path_by_source[source_name] = Path(exact_doc_path)
+                if input_deleted:
+                    stage1_input_files_deleted += 1
 
-    # Phase 1b: build the exact duplicate-hash index one bucket at a time so the
-    # peak Counter size is bounded by a bucket, not by the full corpus.
-    log_progress("phase 1b start: building duplicate line-hash bucket index")
-    phase_start = time.time()
-    exact_bucket_workers = min(args.exact_bucket_workers, args.exact_hash_buckets)
-    duplicate_line_hash_count = 0
-    raw_line_hash_instances_indexed = 0
-    with concurrent.futures.ProcessPoolExecutor(max_workers=exact_bucket_workers) as executor:
-        futures = [
-            executor.submit(
-                build_duplicate_line_hash_bucket,
-                bucket_id,
-                shard_dirs,
-                str(layout["duplicate_line_hashes"]),
-                not args.keep_work,
-            )
-            for bucket_id in range(args.exact_hash_buckets)
-        ]
-        for future in concurrent.futures.as_completed(futures):
-            _bucket_id, bucket_instances, bucket_duplicate_hashes = future.result()
-            raw_line_hash_instances_indexed += bucket_instances
-            duplicate_line_hash_count += bucket_duplicate_hashes
-
-    if not args.keep_work and layout["line_hash_shards"].exists():
-        shutil.rmtree(layout["line_hash_shards"])
-    phase_elapsed_seconds["phase_1b_duplicate_line_hash_index"] = time.time() - phase_start
-    log_progress(
-        "phase 1b complete: "
-        f"{raw_line_hash_instances_indexed} line-hash instances indexed, "
-        f"{duplicate_line_hash_count} duplicate hashes retained in "
-        f"{phase_elapsed_seconds['phase_1b_duplicate_line_hash_index']:.3f}s"
-    )
-
-    # Phase 2: materialize the globally exact-deduplicated checkpoint. After
-    # this finishes, downstream phases no longer need the large stage-1 inputs.
-    log_progress("phase 2 start: materializing exact-line dedup checkpoint")
-    phase_start = time.time()
-    stage1_input_files_deleted = 0
-    exact_doc_path_by_source: dict[str, Path] = {}
-    with concurrent.futures.ProcessPoolExecutor(
-        max_workers=worker_count,
-        initializer=init_exact_worker,
-        initargs=(
-            str(layout["duplicate_line_hashes"]),
-            args.exact_hash_buckets,
-            args.exact_bucket_cache_size,
-        ),
-    ) as executor:
-        futures = [
-            executor.submit(
-                materialize_exact_stage_for_stage1_file,
-                str(input_path),
-                str(layout["exact_docs"]),
-                str(layout["review_logs"]),
-                args.review_chars,
-                args.delete_input_after_write,
-            )
-            for input_path in input_paths
-        ]
-        for future in concurrent.futures.as_completed(futures):
-            source_name, counts, input_deleted, exact_doc_path = future.result()
-            aggregate.update(counts)
-            source_counts[source_name].update(counts)
-            exact_doc_path_by_source[source_name] = Path(exact_doc_path)
-            if input_deleted:
-                stage1_input_files_deleted += 1
-
-    global_doc_offsets: dict[str, int] = {}
-    next_global_doc_index = 0
-    for input_path in input_paths:
-        source_name = input_path.name
-        global_doc_offsets[source_name] = next_global_doc_index
-        next_global_doc_index += source_counts[source_name]["docs_after_exact_line_dedup"]
-    exact_doc_paths = [exact_doc_path_by_source[input_path.name] for input_path in input_paths]
-    phase_elapsed_seconds["phase_2_exact_line_dedup"] = time.time() - phase_start
-    log_progress(
-        "phase 2 complete: "
-        f"{aggregate['docs_after_exact_line_dedup']} docs survive exact-line dedup, "
-        f"{stage1_input_files_deleted} stage-1 files deleted in "
-        f"{phase_elapsed_seconds['phase_2_exact_line_dedup']:.3f}s"
-    )
+        global_doc_offsets = {}
+        next_global_doc_index = 0
+        for input_path in input_paths:
+            source_name = input_path.name
+            global_doc_offsets[source_name] = next_global_doc_index
+            next_global_doc_index += source_counts[source_name]["docs_after_exact_line_dedup"]
+        exact_doc_paths = [exact_doc_path_by_source[input_path.name] for input_path in input_paths]
+        phase_elapsed_seconds["phase_2_exact_line_dedup"] = time.time() - phase_start
+        log_progress(
+            "phase 2 complete: "
+            f"{aggregate['docs_after_exact_line_dedup']} docs survive exact-line dedup, "
+            f"{stage1_input_files_deleted} stage-1 files deleted in "
+            f"{phase_elapsed_seconds['phase_2_exact_line_dedup']:.3f}s"
+        )
+        write_exact_stage_manifest(
+            output_dir=output_dir,
+            input_glob=input_glob,
+            input_paths=input_paths,
+            exact_doc_paths=exact_doc_paths,
+            global_doc_offsets=global_doc_offsets,
+            source_counts=source_counts,
+            aggregate=aggregate,
+            phase_elapsed_seconds=phase_elapsed_seconds,
+            raw_line_hash_instances_indexed=raw_line_hash_instances_indexed,
+            duplicate_line_hash_count=duplicate_line_hash_count,
+            exact_bucket_workers=exact_bucket_workers,
+            args=args,
+            stage1_input_files_deleted=stage1_input_files_deleted,
+        )
+        log_progress(f"exact checkpoint manifest written: {exact_stage_manifest_path(output_dir)}")
 
     # Phase 3: preprocess the exact-deduplicated checkpoint into compact
     # compressed chunks for global MinHash/LSH.
@@ -968,6 +1135,7 @@ def main() -> None:
     # Phase 6: final write-back from the exact-deduplicated checkpoint.
     log_progress("phase 6 start: writing final deduped docs")
     phase_start = time.time()
+    exact_doc_files_deleted = 0
     with concurrent.futures.ProcessPoolExecutor(
         max_workers=worker_count,
         initializer=init_fuzzy_write_worker,
@@ -980,17 +1148,21 @@ def main() -> None:
                 str(output_dir),
                 global_doc_offsets[input_path.name],
                 args.review_chars,
+                not args.keep_work,
             )
             for input_path in exact_doc_paths
         ]
         for future in concurrent.futures.as_completed(futures):
-            source_name, counts = future.result()
+            source_name, counts, input_deleted = future.result()
             aggregate.update(counts)
             source_counts[source_name].update(counts)
+            if input_deleted:
+                exact_doc_files_deleted += 1
     phase_elapsed_seconds["phase_6_write_back"] = time.time() - phase_start
     log_progress(
         "phase 6 complete: "
-        f"{aggregate['decision_keep']} docs kept in "
+        f"{aggregate['decision_keep']} docs kept, "
+        f"{exact_doc_files_deleted} exact checkpoint files deleted in "
         f"{phase_elapsed_seconds['phase_6_write_back']:.3f}s"
     )
 
@@ -1005,8 +1177,9 @@ def main() -> None:
     )
 
     aggregate_summary = {
-        "input_glob": args.input_glob,
+        "input_glob": input_glob,
         "num_input_files": len(input_paths),
+        "resumed_from_exact_docs": args.resume_from_exact_docs,
         "num_hashes": args.num_hashes,
         "num_bands": args.num_bands,
         "ngrams": args.ngrams,
@@ -1028,6 +1201,7 @@ def main() -> None:
         "cleanup": {
             "preprocessed_chunks_deleted_after_phase_4": preprocessed_chunks_deleted,
             "stage1_input_files_deleted_after_phase_2": stage1_input_files_deleted,
+            "exact_doc_files_deleted_after_phase_6": exact_doc_files_deleted,
             "work_dir_removed_after_phase_6": not args.keep_work,
         },
         "aggregate_counts": dict(aggregate),
