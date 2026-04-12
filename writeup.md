@@ -152,7 +152,11 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** A script (or sequence of scripts) that filters the provided CC WET files in parallel to produce language modeling data. A written breakdown of what proportion of the discarded examples are removed by each filter step.
 
-**Answer:** TODO
+**Answer:** We used a sequence of scripts rather than a single monolithic script. In the self-hosted environment, we randomly selected and downloaded 5,000 WET files from `CC-MAIN-2026-12`; this is the same type of Common Crawl WET input as the handout, but not the pre-mounted Together cluster `/data/CC` path. The stage-1 filter (`scripts/filter_cc_wet_stage1.py`) processed WET records in parallel and applied, in order: English language identification with threshold `0.8`, harmful-content filtering, Gopher-style quality rules, a fastText quality classifier with threshold `0.65`, and PII masking for kept documents. Then `scripts/dedup_stage2.py` performed global exact-line deduplication followed by MinHash near-deduplication, and `scripts/tokenize_filtered_data.py` tokenized the final kept text.
+
+The first-stage document filters saw `96,319,279` WET records and kept `9,080,206` documents (`9.43%`). Among the `87,239,073` records discarded in stage 1, the language filter removed the largest share: `76,316,102` records, or `87.48%` of the stage-1 discards. The quality classifier removed `8,181,266` records (`9.38%` of stage-1 discards), the Gopher rules removed `2,699,978` records (`3.09%`), harmful-content filtering removed `41,702` records (`0.048%`), and `25` records were empty after stripping. PII masking did not discard documents, but it modified `3,081,461` kept documents, which is `33.94%` of the stage-1 kept set.
+
+The deduplication stage then processed the `9,080,206` stage-1 kept documents. Exact-line deduplication indexed `1,304,532,231` line instances and removed `1,054,738,707` repeated line instances (`80.85%` of line instances); after this line removal, `452,581` documents became empty and were discarded. MinHash deduplication generated `132,904` candidate duplicate pairs, confirmed `15,287` duplicate pairs, and removed `6,355` additional documents. The final filtered dataset contains `8,621,270` documents, or `8.95%` of the original WET records.
 
 ### (b)
 **Question:** How long does it take to filter the 5,000 WET files? How long would it take to filter the entire Common Crawl dump (100,000 WETs)?
