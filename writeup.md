@@ -176,37 +176,39 @@ A simple linear extrapolation from `5,000` to `100,000` WET files multiplies the
 
 **Deliverable:** Five random examples from the final filtered data, plus a 1-2 sentence description of each example and whether it is worthwhile to use for language modeling.
 
-**Answer:** TODO
+**Answer:** We sampled five examples from the final stage-2 deduplicated dataset using seed `336`. Overall, the sample suggests that the filtered dataset contains several useful long-form or semi-long-form English documents, but it still admits some web boilerplate and commercial navigation text.
 
 | Example | Excerpt | Description | Worth keeping? |
 | --- | --- | --- | --- |
-| 1 | TODO | TODO | TODO |
-| 2 | TODO | TODO | TODO |
-| 3 | TODO | TODO | TODO |
-| 4 | TODO | TODO | TODO |
-| 5 | TODO | TODO | TODO |
+| 1 | `Exodus 20:22 ... Bible Commentary` | A Bible verse page with parallel translations and commentary. It is fluent English, but it is repetitive and domain-specific. | Borderline yes: useful as clean English text, but less representative of broad C4-style web domains. |
+| 2 | `Manyavar Store in Kankurgachi ... Choose your Shipping Country` | An e-commerce/store page dominated by menus, product categories, and shipping/navigation text. | Mostly no: this is the clearest kept-sample failure, since it is mostly boilerplate rather than natural prose. |
+| 3 | `Massachusetts Man Found Guilty ... Capitol Breach` | A news/legal article about a Capitol breach case, with coherent factual prose. | Yes: this is the kind of article-like web text that should help broad-domain language modeling. |
+| 4 | `Tips for Hiring Your First Employee` | A business/entrepreneurship tag page containing short article summaries about hiring and performance reviews. | Yes, with caveats: it has some index-page structure, but the retained text is mostly readable topical prose. |
+| 5 | `John Hendricks ... co-founded Strike Source` | A biographical page with coherent sentences about a media/news figure and related work. | Yes: this is relatively clean English prose and seems suitable for language modeling. |
 
 ### (b)
 **Question:** Take five CC WETs that were removed and/or modified by your filtering script. What part of your filtering process removed or modified these documents, and do you think that their removal and/or modification was justified?
 
 **Deliverable:** Five random discarded examples from the original WETs, plus a 1-2 sentence description of each example and whether its removal was justified.
 
-**Answer:** TODO
+**Answer:** The five sampled removed/modified examples from the review logs were all dropped by stage-2 exact-line deduplication with reason `exact_line_dedup_empty`: after globally repeated lines were removed, no useful unique text remained. This makes the examples especially helpful for checking whether exact-line dedup is removing boilerplate rather than discarding unique prose.
 
 | Example | Excerpt | Removed/modified by | Was it justified? |
 | --- | --- | --- | --- |
-| 1 | TODO | TODO | TODO |
-| 2 | TODO | TODO | TODO |
-| 3 | TODO | TODO | TODO |
-| 4 | TODO | TODO | TODO |
-| 5 | TODO | TODO | TODO |
+| 1 | `Diversity Equity Inclusion Belonging Archives ... About Overview` | `exact_line_dedup_empty` | Yes. The page is mostly repeated school navigation, portals, calendars, and menu boilerplate, so dropping it should improve the training set. |
+| 2 | `Introducing Manulife InvestChoice ... Our funds` | `exact_line_dedup_empty` | Yes. The sampled text is dominated by fund-site navigation, login prompts, role selectors, and repeated headings rather than article content. |
+| 3 | `Default Web Site Page ... SORRY!` | `exact_line_dedup_empty`; the PII masker also replaced an email address with `\|\|\|EMAIL_ADDRESS\|\|\|` before the final drop. | Yes. This is a generic cPanel default page and not useful natural web content for the target benchmark. |
+| 4 | `cybersecuritysymposium.com is for sale` | `exact_line_dedup_empty`; the PII masker also replaced a phone number with `\|\|\|PHONE_NUMBER\|\|\|` before the final drop. | Yes. It is a parked-domain sales page with prices, transaction boilerplate, and support text. |
+| 5 | `Mansur – male gyrfalcon ... Sponsorship Bronze` | `exact_line_dedup_empty` | Mostly yes, but this is the most borderline removal. It includes a little animal-description prose, but the page is mixed with sponsorship/product-template text and was not unique after exact-line deduplication. |
 
 ### (c)
 **Question:** If your analysis above motivates further changes to your data pipeline, report any changes and/or iterations of data that you experimented with.
 
 **Deliverable:** A description of data changes and/or iterations that you experimented with.
 
-**Answer:** TODO
+**Answer:** This inspection did not motivate a final change to the filtering thresholds or deduplication semantics. The kept Manyavar store page shows that some e-commerce and navigation boilerplate still leaks through, so a future iteration could add a stronger navigation/catalog-page filter or domain/template heuristic. However, changing the final pipeline at this point would also risk removing legitimate short article index pages such as the business-blog sample, and the removed examples suggest that exact-line deduplication is already catching many highly templated pages.
+
+Therefore, we kept the final data pipeline unchanged after this inspection. The main iterations we made for the final run were systems-level and semantics-preserving: improving the stage-2 deduplication storage lifecycle, adding an exact-checkpoint resume path, and verifying with a 50-WET A/B check that the optimized implementation matched the older stage-2 behavior.
 
 ---
 
