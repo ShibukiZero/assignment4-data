@@ -5,8 +5,9 @@ import concurrent.futures
 import glob
 import hashlib
 import json
+import mmap
 import shutil
-from collections import Counter, defaultdict
+from collections import Counter, OrderedDict, defaultdict
 from pathlib import Path
 import time
 
@@ -27,8 +28,10 @@ from cs336_data.deduplication import (
 _SIMILARITY_NORMALIZED_TEXTS: list[str] = []
 _SIMILARITY_NGRAMS = 5
 _SIMILARITY_THRESHOLD = 0.8
-_DUPLICATE_LINE_HASHES: set[bytes] = set()
+_DUPLICATE_LINE_HASH_INDEX: DuplicateLineHashIndex | None = None
 _FUZZY_REMOVED_GLOBAL_DOC_INDICES: set[int] = set()
+LINE_HASH_BYTES = 16
+SHARD_WRITE_HANDLE_CACHE_SIZE = 64
 
 
 def parse_args() -> argparse.Namespace:
@@ -92,6 +95,30 @@ def parse_args() -> argparse.Namespace:
         help="Number of exact-stage documents per phase-3 preprocessing task.",
     )
     parser.add_argument(
+        "--exact-hash-buckets",
+        type=int,
+        default=256,
+        help=(
+            "Number of disk buckets for the exact-line duplicate-hash index. "
+            "More buckets reduce per-bucket memory during index construction."
+        ),
+    )
+    parser.add_argument(
+        "--exact-bucket-workers",
+        type=int,
+        default=8,
+        help="Number of workers used to build duplicate line-hash bucket files.",
+    )
+    parser.add_argument(
+        "--exact-bucket-cache-size",
+        type=int,
+        default=256,
+        help=(
+            "Maximum duplicate-hash bucket mmaps kept open per worker while "
+            "checking exact-line dedup membership."
+        ),
+    )
+    parser.add_argument(
         "--keep-work",
         action="store_true",
         help="Keep stage-2 temporary work files after they have been consumed.",
@@ -100,8 +127,9 @@ def parse_args() -> argparse.Namespace:
         "--delete-input-after-write",
         action="store_true",
         help=(
-            "Delete each input stage-1 kept-doc file after its final stage-2 outputs "
-            "have been written. This is intended for disk-constrained full-pipeline runs."
+            "Delete each input stage-1 kept-doc file after its exact-deduplicated "
+            "stage-2 checkpoint has been written. This is intended for disk-constrained "
+            "full-pipeline runs."
         ),
     )
     return parser.parse_args()
@@ -132,6 +160,79 @@ def chunked_pairs(
     return [pairs[index : index + chunk_size] for index in range(0, len(pairs), chunk_size)]
 
 
+def log_progress(message: str) -> None:
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[dedup_stage2] {timestamp} {message}", flush=True)
+
+
+def chunked_paths(paths: list[Path], num_chunks: int) -> list[list[Path]]:
+    chunk_size = max(1, (len(paths) + num_chunks - 1) // num_chunks)
+    return [paths[index : index + chunk_size] for index in range(0, len(paths), chunk_size)]
+
+
+def line_hash_bucket_id(line_hash: bytes, num_buckets: int) -> int:
+    return int.from_bytes(line_hash[:4], byteorder="big", signed=False) % num_buckets
+
+
+def duplicate_hash_bucket_path(bucket_dir: Path, bucket_id: int) -> Path:
+    return bucket_dir / f"bucket_{bucket_id:04d}.bin"
+
+
+def sorted_hash_bucket_contains(bucket_mmap: mmap.mmap, line_hash: bytes) -> bool:
+    record_count = len(bucket_mmap) // LINE_HASH_BYTES
+    left = 0
+    right = record_count
+
+    while left < right:
+        middle = (left + right) // 2
+        start = middle * LINE_HASH_BYTES
+        middle_hash = bucket_mmap[start : start + LINE_HASH_BYTES]
+        if middle_hash < line_hash:
+            left = middle + 1
+        else:
+            right = middle
+
+    if left >= record_count:
+        return False
+    start = left * LINE_HASH_BYTES
+    return bucket_mmap[start : start + LINE_HASH_BYTES] == line_hash
+
+
+class DuplicateLineHashIndex:
+    def __init__(self, bucket_dir: str, num_buckets: int, cache_size: int) -> None:
+        self.bucket_dir = Path(bucket_dir)
+        self.num_buckets = num_buckets
+        self.cache_size = max(1, cache_size)
+        self._cache: OrderedDict[int, tuple[object, mmap.mmap]] = OrderedDict()
+        self._missing_buckets: set[int] = set()
+
+    def contains(self, line_hash: bytes) -> bool:
+        bucket_id = line_hash_bucket_id(line_hash, self.num_buckets)
+        if bucket_id in self._missing_buckets:
+            return False
+
+        handle_and_mmap = self._cache.get(bucket_id)
+        if handle_and_mmap is None:
+            bucket_path = duplicate_hash_bucket_path(self.bucket_dir, bucket_id)
+            if not bucket_path.exists() or bucket_path.stat().st_size == 0:
+                self._missing_buckets.add(bucket_id)
+                return False
+
+            handle = bucket_path.open("rb")
+            bucket_mmap = mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ)
+            handle_and_mmap = (handle, bucket_mmap)
+            self._cache[bucket_id] = handle_and_mmap
+
+            while len(self._cache) > self.cache_size:
+                _old_bucket_id, (old_handle, old_mmap) = self._cache.popitem(last=False)
+                old_mmap.close()
+                old_handle.close()
+        else:
+            self._cache.move_to_end(bucket_id)
+
+        return sorted_hash_bucket_contains(handle_and_mmap[1], line_hash)
+
+
 def init_similarity_worker(
     normalized_texts: list[str],
     ngrams: int,
@@ -144,12 +245,23 @@ def init_similarity_worker(
 
 
 def init_exact_worker(
-    duplicate_line_hashes: set[bytes],
+    duplicate_line_hash_bucket_dir: str,
+    exact_hash_buckets: int,
+    exact_bucket_cache_size: int,
     fuzzy_removed_global_doc_indices: set[int] | None = None,
 ) -> None:
-    global _DUPLICATE_LINE_HASHES, _FUZZY_REMOVED_GLOBAL_DOC_INDICES
-    _DUPLICATE_LINE_HASHES = duplicate_line_hashes
+    global _DUPLICATE_LINE_HASH_INDEX, _FUZZY_REMOVED_GLOBAL_DOC_INDICES
+    _DUPLICATE_LINE_HASH_INDEX = DuplicateLineHashIndex(
+        duplicate_line_hash_bucket_dir,
+        exact_hash_buckets,
+        exact_bucket_cache_size,
+    )
     _FUZZY_REMOVED_GLOBAL_DOC_INDICES = fuzzy_removed_global_doc_indices or set()
+
+
+def init_fuzzy_write_worker(fuzzy_removed_global_doc_indices: set[int]) -> None:
+    global _FUZZY_REMOVED_GLOBAL_DOC_INDICES
+    _FUZZY_REMOVED_GLOBAL_DOC_INDICES = fuzzy_removed_global_doc_indices
 
 
 def similar_pairs_in_chunk(pair_chunk: list[tuple[int, int]]) -> list[tuple[int, int]]:
@@ -216,23 +328,97 @@ def compute_minhash_signature_from_payloads(
     return tuple(signature)
 
 
-def count_line_hashes_for_stage1_file(
-    input_path: str,
-) -> tuple[str, dict[str, int], Counter[bytes]]:
-    input_path_obj = Path(input_path)
-    source_name = input_path_obj.name
-    counts = Counter()
+def write_line_hash_bucket_shard(
+    input_paths: list[str],
+    shard_id: int,
+    shard_root_dir: str,
+    exact_hash_buckets: int,
+) -> tuple[str, dict[str, dict[str, int]]]:
+    shard_dir = Path(shard_root_dir) / f"shard_{shard_id:04d}"
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    handles: OrderedDict[int, object] = OrderedDict()
+    source_counts: dict[str, dict[str, int]] = {}
+
+    def bucket_handle(bucket_id: int) -> object:
+        handle = handles.get(bucket_id)
+        if handle is None:
+            bucket_path = duplicate_hash_bucket_path(shard_dir, bucket_id)
+            handle = bucket_path.open("ab")
+            handles[bucket_id] = handle
+            while len(handles) > SHARD_WRITE_HANDLE_CACHE_SIZE:
+                _old_bucket_id, old_handle = handles.popitem(last=False)
+                old_handle.close()
+        else:
+            handles.move_to_end(bucket_id)
+        return handle
+
+    try:
+        for input_path in input_paths:
+            input_path_obj = Path(input_path)
+            source_name = input_path_obj.name
+            counts = Counter()
+
+            with xopen(input_path_obj, "rt") as handle:
+                for line in handle:
+                    payload = json.loads(line)
+                    counts["docs_seen"] += 1
+                    for doc_line in document_lines(payload["text"]):
+                        line_hash = hash_line(doc_line)
+                        bucket_id = line_hash_bucket_id(line_hash, exact_hash_buckets)
+                        bucket_handle(bucket_id).write(line_hash)
+                        counts["line_instances_seen"] += 1
+
+            source_counts[source_name] = dict(counts)
+    finally:
+        for handle in handles.values():
+            handle.close()
+
+    return str(shard_dir), source_counts
+
+
+def build_duplicate_line_hash_bucket(
+    bucket_id: int,
+    shard_dirs: list[str],
+    duplicate_bucket_dir: str,
+    delete_shards_after_read: bool,
+) -> tuple[int, int, int]:
     line_hash_counts: Counter[bytes] = Counter()
+    raw_line_hash_instances = 0
 
-    with xopen(input_path_obj, "rt") as handle:
-        for line in handle:
-            payload = json.loads(line)
-            counts["docs_seen"] += 1
-            for doc_line in document_lines(payload["text"]):
-                line_hash_counts[hash_line(doc_line)] += 1
-                counts["line_instances_seen"] += 1
+    for shard_dir in shard_dirs:
+        shard_bucket_path = duplicate_hash_bucket_path(Path(shard_dir), bucket_id)
+        if not shard_bucket_path.exists():
+            continue
 
-    return source_name, dict(counts), line_hash_counts
+        with shard_bucket_path.open("rb") as handle:
+            while chunk := handle.read(LINE_HASH_BYTES * 65536):
+                if len(chunk) % LINE_HASH_BYTES != 0:
+                    raise ValueError(f"Corrupt line-hash bucket: {shard_bucket_path}")
+                raw_line_hash_instances += len(chunk) // LINE_HASH_BYTES
+                line_hash_counts.update(
+                    chunk[index : index + LINE_HASH_BYTES]
+                    for index in range(0, len(chunk), LINE_HASH_BYTES)
+                )
+
+        if delete_shards_after_read:
+            shard_bucket_path.unlink()
+
+    duplicate_hashes = sorted(
+        line_hash for line_hash, count in line_hash_counts.items() if count > 1
+    )
+    duplicate_bucket_path = duplicate_hash_bucket_path(Path(duplicate_bucket_dir), bucket_id)
+    duplicate_bucket_path.parent.mkdir(parents=True, exist_ok=True)
+    if duplicate_hashes:
+        with duplicate_bucket_path.open("wb") as handle:
+            handle.writelines(duplicate_hashes)
+
+    return bucket_id, raw_line_hash_instances, len(duplicate_hashes)
+
+
+def duplicate_line_hash_exists(line_hash: bytes) -> bool:
+    if _DUPLICATE_LINE_HASH_INDEX is None:
+        raise RuntimeError("Duplicate line-hash index has not been initialized.")
+    return _DUPLICATE_LINE_HASH_INDEX.contains(line_hash)
 
 
 def exact_line_dedup_text(text: str) -> tuple[str, int, int, int]:
@@ -240,34 +426,72 @@ def exact_line_dedup_text(text: str) -> tuple[str, int, int, int]:
     kept_lines = [
         doc_line
         for doc_line in original_lines
-        if hash_line(doc_line) not in _DUPLICATE_LINE_HASHES
+        if not duplicate_line_hash_exists(hash_line(doc_line))
     ]
     exact_text = "".join(kept_lines)
     return exact_text, len(original_lines), len(kept_lines), len(original_lines) - len(kept_lines)
 
 
-def count_exact_line_dedup_for_stage1_file(input_path: str) -> tuple[str, dict[str, int]]:
+def materialize_exact_stage_for_stage1_file(
+    input_path: str,
+    exact_doc_dir: str,
+    review_log_dir: str,
+    review_chars: int,
+    delete_input_after_write: bool,
+) -> tuple[str, dict[str, int], bool, str]:
     input_path_obj = Path(input_path)
     source_name = input_path_obj.name
+    exact_doc_path = Path(exact_doc_dir) / source_name
+    review_path = Path(review_log_dir) / source_name
+    exact_doc_path.parent.mkdir(parents=True, exist_ok=True)
+    review_path.parent.mkdir(parents=True, exist_ok=True)
     counts = Counter()
 
-    with xopen(input_path_obj, "rt") as source:
+    with (
+        xopen(input_path_obj, "rt") as source,
+        xopen(exact_doc_path, "wt") as exact_sink,
+        xopen(review_path, "at") as review_sink,
+    ):
         for line in source:
             payload = json.loads(line)
-            exact_text, _original_line_count, _exact_line_count, line_instances_removed = (
+            exact_text, original_line_count, exact_line_count, line_instances_removed = (
                 exact_line_dedup_text(payload["text"])
             )
             counts["exact_line_instances_removed"] += line_instances_removed
 
             if not exact_text.strip():
                 counts["decision_exact_line_dedup_empty"] += 1
+                review_payload = {
+                    **payload,
+                    "decision": "drop",
+                    "drop_reason": "exact_line_dedup_empty",
+                    "original_line_count": original_line_count,
+                    "exact_line_count": exact_line_count,
+                    "exact_line_instances_removed": line_instances_removed,
+                    "text_preview": text_preview(payload["text"], review_chars),
+                }
+                review_sink.write(json.dumps(review_payload, ensure_ascii=False) + "\n")
             else:
+                exact_payload = dict(payload)
+                exact_payload["text"] = exact_text
+                exact_payload["text_preview"] = text_preview(exact_text, review_chars)
+                exact_payload["dedup"] = {
+                    "exact_line_instances_removed": line_instances_removed,
+                    "original_line_count": original_line_count,
+                    "exact_line_count": exact_line_count,
+                }
+                exact_sink.write(json.dumps(exact_payload, ensure_ascii=False) + "\n")
                 counts["docs_after_exact_line_dedup"] += 1
 
-    return source_name, dict(counts)
+    input_deleted = False
+    if delete_input_after_write:
+        input_path_obj.unlink()
+        input_deleted = True
+
+    return source_name, dict(counts), input_deleted, str(exact_doc_path)
 
 
-def preprocess_stage1_file_to_chunks(
+def preprocess_exact_stage_file_to_chunks(
     input_path: str,
     preprocessed_chunk_dir: str,
     global_doc_offset: int,
@@ -295,17 +519,11 @@ def preprocess_stage1_file_to_chunks(
             current_chunk_path: Path | None = None
             for line in source:
                 payload = json.loads(line)
-                exact_text, _original_line_count, _exact_line_count, _line_instances_removed = (
-                    exact_line_dedup_text(payload["text"])
-                )
-
-                if not exact_text.strip():
-                    continue
 
                 if chunk_handle is None:
                     current_chunk_path, chunk_handle = open_chunk()
 
-                normalized_text = normalize_document_for_deduplication(exact_text)
+                normalized_text = normalize_document_for_deduplication(payload["text"])
                 ngram_payloads = normalized_text_ngram_payloads(normalized_text, ngrams)
                 signature = list(
                     compute_minhash_signature_from_payloads(ngram_payloads, seed_prefixes)
@@ -344,13 +562,12 @@ def preprocess_stage1_file_to_chunks(
     return source_name, chunk_paths, dict(counts)
 
 
-def write_final_outputs_for_stage1_file(
+def write_final_outputs_for_exact_stage_file(
     input_path: str,
     output_dir: str,
     global_doc_offset: int,
     review_chars: int,
-    delete_input_after_write: bool,
-) -> tuple[str, dict[str, int], bool]:
+) -> tuple[str, dict[str, int]]:
     input_path_obj = Path(input_path)
     output_dir_obj = Path(output_dir)
     source_name = input_path_obj.name
@@ -368,58 +585,35 @@ def write_final_outputs_for_stage1_file(
     ):
         for line in handle:
             payload = json.loads(line)
-            exact_text, original_line_count, exact_line_count, line_instances_removed = (
-                exact_line_dedup_text(payload["text"])
-            )
-
-            if not exact_text.strip():
-                review_payload = {
-                    **payload,
-                    "decision": "drop",
-                    "drop_reason": "exact_line_dedup_empty",
-                    "original_line_count": original_line_count,
-                    "exact_line_count": exact_line_count,
-                    "exact_line_instances_removed": line_instances_removed,
-                    "text_preview": text_preview(payload["text"], review_chars),
-                }
-                review_sink.write(json.dumps(review_payload, ensure_ascii=False) + "\n")
-                continue
-
             global_doc_index = global_doc_offset + local_doc_index
             local_doc_index += 1
 
             if global_doc_index in _FUZZY_REMOVED_GLOBAL_DOC_INDICES:
                 counts["decision_minhash_duplicate"] += 1
+                exact_dedup = payload.get("dedup", {})
                 review_payload = {
                     **payload,
                     "decision": "drop",
                     "drop_reason": "minhash_duplicate",
-                    "original_line_count": original_line_count,
-                    "exact_line_count": exact_line_count,
-                    "exact_line_instances_removed": line_instances_removed,
-                    "text_preview": text_preview(exact_text, review_chars),
+                    "original_line_count": exact_dedup.get("original_line_count"),
+                    "exact_line_count": exact_dedup.get("exact_line_count"),
+                    "exact_line_instances_removed": exact_dedup.get(
+                        "exact_line_instances_removed"
+                    ),
+                    "text_preview": text_preview(payload["text"], review_chars),
                 }
+                review_payload.pop("dedup", None)
                 review_sink.write(json.dumps(review_payload, ensure_ascii=False) + "\n")
                 continue
 
             kept_payload = dict(payload)
-            kept_payload["text"] = exact_text
-            kept_payload["text_preview"] = text_preview(exact_text, review_chars)
-            kept_payload["dedup"] = {
-                "exact_line_instances_removed": line_instances_removed,
-                "original_line_count": original_line_count,
-                "exact_line_count": exact_line_count,
-                "minhash_survivor": True,
-            }
+            kept_payload["text_preview"] = text_preview(payload["text"], review_chars)
+            kept_payload["dedup"] = dict(payload.get("dedup", {}))
+            kept_payload["dedup"]["minhash_survivor"] = True
             deduped_sink.write(json.dumps(kept_payload, ensure_ascii=False) + "\n")
             counts["decision_keep"] += 1
 
-    input_deleted = False
-    if delete_input_after_write:
-        input_path_obj.unlink()
-        input_deleted = True
-
-    return source_name, dict(counts), input_deleted
+    return source_name, dict(counts)
 
 
 def source_output_paths(output_dir: Path, source_name: str) -> tuple[Path, Path, Path]:
@@ -461,6 +655,9 @@ def ensure_output_layout(output_dir: Path) -> dict[str, Path]:
         "review_logs": output_dir / "review_logs",
         "summaries": output_dir / "summaries",
         "work": output_dir / "_work",
+        "exact_docs": output_dir / "_work" / "exact_docs",
+        "line_hash_shards": output_dir / "_work" / "line_hash_shards",
+        "duplicate_line_hashes": output_dir / "_work" / "duplicate_line_hashes",
         "preprocessed_chunks": output_dir / "_work" / "preprocessed_chunks",
     }
     for path in layout.values():
@@ -478,6 +675,12 @@ def main() -> None:
         raise ValueError("num_hashes must be evenly divisible by num_bands.")
     if args.phase3_chunk_docs <= 0:
         raise ValueError("phase3_chunk_docs must be positive.")
+    if args.exact_hash_buckets <= 0:
+        raise ValueError("exact_hash_buckets must be positive.")
+    if args.exact_bucket_workers <= 0:
+        raise ValueError("exact_bucket_workers must be positive.")
+    if args.exact_bucket_cache_size <= 0:
+        raise ValueError("exact_bucket_cache_size must be positive.")
 
     input_paths = sorted(Path(path) for path in glob.glob(args.input_glob))
     if not input_paths:
@@ -497,44 +700,107 @@ def main() -> None:
     source_counts: dict[str, Counter] = defaultdict(Counter)
     worker_count = min(args.workers, len(input_paths))
     phase_elapsed_seconds: dict[str, float] = {}
+    log_progress(
+        f"starting stage 2 with {len(input_paths)} input files, "
+        f"{worker_count} document workers, {args.exact_hash_buckets} exact-hash buckets"
+    )
 
-    # Phase 1: parallel global line-hash counting for exact line deduplication.
+    # Phase 1a: stream line hashes to disk buckets. Returning one giant Counter
+    # per worker does not scale to the full 5000-WET run.
+    log_progress("phase 1a start: writing exact-line hash bucket shards")
     phase_start = time.time()
-    line_hash_counts: Counter[bytes] = Counter()
+    shard_dirs: list[str] = []
+    input_path_chunks = chunked_paths(input_paths, worker_count)
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [
-            executor.submit(count_line_hashes_for_stage1_file, str(input_path))
-            for input_path in input_paths
+            executor.submit(
+                write_line_hash_bucket_shard,
+                [str(input_path) for input_path in input_path_chunk],
+                shard_id,
+                str(layout["line_hash_shards"]),
+                args.exact_hash_buckets,
+            )
+            for shard_id, input_path_chunk in enumerate(input_path_chunks)
         ]
         for future in concurrent.futures.as_completed(futures):
-            source_name, counts, local_counter = future.result()
-            aggregate.update(counts)
-            source_counts[source_name].update(counts)
-            line_hash_counts.update(local_counter)
-    phase_elapsed_seconds["phase_1_line_hash_counting"] = time.time() - phase_start
+            shard_dir, shard_source_counts = future.result()
+            shard_dirs.append(shard_dir)
+            for source_name, counts in shard_source_counts.items():
+                aggregate.update(counts)
+                source_counts[source_name].update(counts)
+    phase_elapsed_seconds["phase_1a_line_hash_bucket_sharding"] = time.time() - phase_start
+    log_progress(
+        "phase 1a complete: "
+        f"{aggregate['line_instances_seen']} line instances bucketed in "
+        f"{phase_elapsed_seconds['phase_1a_line_hash_bucket_sharding']:.3f}s"
+    )
 
-    duplicate_line_hashes = {
-        line_hash for line_hash, count in line_hash_counts.items() if count > 1
-    }
-    del line_hash_counts
-
-    # Phase 2: exact line deduplication planning. This computes per-file survivor
-    # counts first so phase 3 can assign stable global_doc_index offsets while
-    # still processing files in parallel.
+    # Phase 1b: build the exact duplicate-hash index one bucket at a time so the
+    # peak Counter size is bounded by a bucket, not by the full corpus.
+    log_progress("phase 1b start: building duplicate line-hash bucket index")
     phase_start = time.time()
+    exact_bucket_workers = min(args.exact_bucket_workers, args.exact_hash_buckets)
+    duplicate_line_hash_count = 0
+    raw_line_hash_instances_indexed = 0
+    with concurrent.futures.ProcessPoolExecutor(max_workers=exact_bucket_workers) as executor:
+        futures = [
+            executor.submit(
+                build_duplicate_line_hash_bucket,
+                bucket_id,
+                shard_dirs,
+                str(layout["duplicate_line_hashes"]),
+                not args.keep_work,
+            )
+            for bucket_id in range(args.exact_hash_buckets)
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            _bucket_id, bucket_instances, bucket_duplicate_hashes = future.result()
+            raw_line_hash_instances_indexed += bucket_instances
+            duplicate_line_hash_count += bucket_duplicate_hashes
+
+    if not args.keep_work and layout["line_hash_shards"].exists():
+        shutil.rmtree(layout["line_hash_shards"])
+    phase_elapsed_seconds["phase_1b_duplicate_line_hash_index"] = time.time() - phase_start
+    log_progress(
+        "phase 1b complete: "
+        f"{raw_line_hash_instances_indexed} line-hash instances indexed, "
+        f"{duplicate_line_hash_count} duplicate hashes retained in "
+        f"{phase_elapsed_seconds['phase_1b_duplicate_line_hash_index']:.3f}s"
+    )
+
+    # Phase 2: materialize the globally exact-deduplicated checkpoint. After
+    # this finishes, downstream phases no longer need the large stage-1 inputs.
+    log_progress("phase 2 start: materializing exact-line dedup checkpoint")
+    phase_start = time.time()
+    stage1_input_files_deleted = 0
+    exact_doc_path_by_source: dict[str, Path] = {}
     with concurrent.futures.ProcessPoolExecutor(
         max_workers=worker_count,
         initializer=init_exact_worker,
-        initargs=(duplicate_line_hashes,),
+        initargs=(
+            str(layout["duplicate_line_hashes"]),
+            args.exact_hash_buckets,
+            args.exact_bucket_cache_size,
+        ),
     ) as executor:
         futures = [
-            executor.submit(count_exact_line_dedup_for_stage1_file, str(input_path))
+            executor.submit(
+                materialize_exact_stage_for_stage1_file,
+                str(input_path),
+                str(layout["exact_docs"]),
+                str(layout["review_logs"]),
+                args.review_chars,
+                args.delete_input_after_write,
+            )
             for input_path in input_paths
         ]
         for future in concurrent.futures.as_completed(futures):
-            source_name, counts = future.result()
+            source_name, counts, input_deleted, exact_doc_path = future.result()
             aggregate.update(counts)
             source_counts[source_name].update(counts)
+            exact_doc_path_by_source[source_name] = Path(exact_doc_path)
+            if input_deleted:
+                stage1_input_files_deleted += 1
 
     global_doc_offsets: dict[str, int] = {}
     next_global_doc_index = 0
@@ -542,20 +808,24 @@ def main() -> None:
         source_name = input_path.name
         global_doc_offsets[source_name] = next_global_doc_index
         next_global_doc_index += source_counts[source_name]["docs_after_exact_line_dedup"]
+    exact_doc_paths = [exact_doc_path_by_source[input_path.name] for input_path in input_paths]
     phase_elapsed_seconds["phase_2_exact_line_dedup"] = time.time() - phase_start
+    log_progress(
+        "phase 2 complete: "
+        f"{aggregate['docs_after_exact_line_dedup']} docs survive exact-line dedup, "
+        f"{stage1_input_files_deleted} stage-1 files deleted in "
+        f"{phase_elapsed_seconds['phase_2_exact_line_dedup']:.3f}s"
+    )
 
-    # Phase 3: directly preprocess exact-surviving docs into compact compressed
-    # chunks. This avoids materializing exact_stage and exact_chunks copies.
+    # Phase 3: preprocess the exact-deduplicated checkpoint into compact
+    # compressed chunks for global MinHash/LSH.
+    log_progress("phase 3 start: preprocessing MinHash signatures")
     phase_start = time.time()
     preprocessed_chunk_paths: list[Path] = []
-    with concurrent.futures.ProcessPoolExecutor(
-        max_workers=worker_count,
-        initializer=init_exact_worker,
-        initargs=(duplicate_line_hashes,),
-    ) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [
             executor.submit(
-                preprocess_stage1_file_to_chunks,
+                preprocess_exact_stage_file_to_chunks,
                 str(input_path),
                 str(layout["preprocessed_chunks"]),
                 global_doc_offsets[input_path.name],
@@ -563,7 +833,7 @@ def main() -> None:
                 args.num_hashes,
                 args.phase3_chunk_docs,
             )
-            for input_path in input_paths
+            for input_path in exact_doc_paths
         ]
         for future in concurrent.futures.as_completed(futures):
             source_name, chunk_paths, counts = future.result()
@@ -571,8 +841,15 @@ def main() -> None:
             aggregate.update(counts)
             source_counts[source_name].update(counts)
     phase_elapsed_seconds["phase_3_signature_preprocessing"] = time.time() - phase_start
+    log_progress(
+        "phase 3 complete: "
+        f"{aggregate['docs_preprocessed']} docs preprocessed into "
+        f"{len(preprocessed_chunk_paths)} chunks in "
+        f"{phase_elapsed_seconds['phase_3_signature_preprocessing']:.3f}s"
+    )
 
     # Phase 4: build the same global MinHash candidate space as Chapter 3.
+    log_progress("phase 4 start: building MinHash LSH candidate pairs")
     phase_start = time.time()
     fuzzy_global_doc_indices: list[int] = []
     fuzzy_signatures: list[tuple[int, ...]] = []
@@ -625,8 +902,14 @@ def main() -> None:
                 preprocessed_chunk_path.unlink()
                 preprocessed_chunks_deleted += 1
     phase_elapsed_seconds["phase_4_candidate_generation"] = time.time() - phase_start
+    log_progress(
+        "phase 4 complete: "
+        f"{aggregate['minhash_candidate_pairs']} candidate pairs generated in "
+        f"{phase_elapsed_seconds['phase_4_candidate_generation']:.3f}s"
+    )
 
     # Phase 5: parallel confirmation of candidate pairs with true Jaccard.
+    log_progress("phase 5 start: confirming candidate pairs")
     phase_start = time.time()
     confirmed_duplicate_pairs: list[tuple[int, int]] = []
     if candidate_pairs:
@@ -676,37 +959,44 @@ def main() -> None:
         if local_index not in fuzzy_survivor_local_indices
     }
     phase_elapsed_seconds["phase_5_candidate_confirmation"] = time.time() - phase_start
+    log_progress(
+        "phase 5 complete: "
+        f"{aggregate['minhash_confirmed_duplicate_pairs']} duplicate pairs confirmed in "
+        f"{phase_elapsed_seconds['phase_5_candidate_confirmation']:.3f}s"
+    )
 
-    # Phase 6: final write-back with the original metadata restored. Re-reading
-    # stage-1 inputs avoids keeping a full exact_stage payload copy on disk.
+    # Phase 6: final write-back from the exact-deduplicated checkpoint.
+    log_progress("phase 6 start: writing final deduped docs")
     phase_start = time.time()
-    input_files_deleted = 0
     with concurrent.futures.ProcessPoolExecutor(
         max_workers=worker_count,
-        initializer=init_exact_worker,
-        initargs=(duplicate_line_hashes, fuzzy_removed_global_doc_indices),
+        initializer=init_fuzzy_write_worker,
+        initargs=(fuzzy_removed_global_doc_indices,),
     ) as executor:
         futures = [
             executor.submit(
-                write_final_outputs_for_stage1_file,
+                write_final_outputs_for_exact_stage_file,
                 str(input_path),
                 str(output_dir),
                 global_doc_offsets[input_path.name],
                 args.review_chars,
-                args.delete_input_after_write,
             )
-            for input_path in input_paths
+            for input_path in exact_doc_paths
         ]
         for future in concurrent.futures.as_completed(futures):
-            source_name, counts, input_deleted = future.result()
+            source_name, counts = future.result()
             aggregate.update(counts)
             source_counts[source_name].update(counts)
-            if input_deleted:
-                input_files_deleted += 1
     phase_elapsed_seconds["phase_6_write_back"] = time.time() - phase_start
+    log_progress(
+        "phase 6 complete: "
+        f"{aggregate['decision_keep']} docs kept in "
+        f"{phase_elapsed_seconds['phase_6_write_back']:.3f}s"
+    )
 
     if not args.keep_work and layout["work"].exists():
         shutil.rmtree(layout["work"])
+        log_progress("temporary work directory removed")
 
     summary_paths = write_per_source_summaries(
         input_paths=input_paths,
@@ -724,13 +1014,20 @@ def main() -> None:
         "review_chars": args.review_chars,
         "workers": worker_count,
         "phase3_chunk_docs": args.phase3_chunk_docs,
+        "exact_hash_buckets": args.exact_hash_buckets,
+        "exact_bucket_workers": exact_bucket_workers,
+        "exact_bucket_cache_size": args.exact_bucket_cache_size,
         "keep_work": args.keep_work,
         "delete_input_after_write": args.delete_input_after_write,
         "total_elapsed_seconds": time.time() - total_start,
         "phase_elapsed_seconds": phase_elapsed_seconds,
+        "exact_line_index": {
+            "raw_line_hash_instances_indexed": raw_line_hash_instances_indexed,
+            "duplicate_line_hashes": duplicate_line_hash_count,
+        },
         "cleanup": {
             "preprocessed_chunks_deleted_after_phase_4": preprocessed_chunks_deleted,
-            "input_files_deleted_after_phase_6": input_files_deleted,
+            "stage1_input_files_deleted_after_phase_2": stage1_input_files_deleted,
             "work_dir_removed_after_phase_6": not args.keep_work,
         },
         "aggregate_counts": dict(aggregate),
