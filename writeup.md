@@ -219,7 +219,9 @@ Therefore, we kept the final data pipeline unchanged after this inspection. The 
 
 **Deliverable:** A script to tokenize and serialize your filtered data, and the number of tokens in your produced dataset.
 
-**Answer:** TODO
+**Answer:** We used `scripts/tokenize_filtered_data.py` to tokenize the final stage-2 deduplicated JSONL files with the GPT-2 tokenizer. The script reads the `text` field from each document, tokenizes in batches of `256`, appends the GPT-2 EOS token (`50256`) after each document, and serializes the resulting token stream as a `uint16` binary file. This is safe for GPT-2 because the tokenizer length is `50,257`, so every token id fits in `uint16`.
+
+The final tokenized dataset contains `8,621,270` documents and `9,125,412,810` tokens. The serialized output was written to `filtered_train_gpt2.bin` with size `18,250,825,620` bytes (`17.00` GiB), and the tokenization run took `6,341.76` seconds (`1.76` hours).
 
 ---
 
