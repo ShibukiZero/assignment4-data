@@ -152,14 +152,20 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** A script (or sequence of scripts) that filters the provided CC WET files in parallel to produce language modeling data. A written breakdown of what proportion of the discarded examples are removed by each filter step.
 
-**Answer:** TODO
+**Answer:** We used a sequence of scripts rather than a single monolithic script. In the self-hosted environment, we randomly selected and downloaded 5,000 WET files from `CC-MAIN-2026-12`; this is the same type of Common Crawl WET input as the handout, but not the pre-mounted Together cluster `/data/CC` path. The stage-1 filter (`scripts/filter_cc_wet_stage1.py`) processed WET records in parallel and applied, in order: English language identification with threshold `0.8`, harmful-content filtering, Gopher-style quality rules, a fastText quality classifier with threshold `0.65`, and PII masking for kept documents. Then `scripts/dedup_stage2.py` performed global exact-line deduplication followed by MinHash near-deduplication, and `scripts/tokenize_filtered_data.py` tokenized the final kept text.
+
+The first-stage document filters saw `96,319,279` WET records and kept `9,080,206` documents (`9.43%`). Among the `87,239,073` records discarded in stage 1, the language filter removed the largest share: `76,316,102` records, or `87.48%` of the stage-1 discards. The quality classifier removed `8,181,266` records (`9.38%` of stage-1 discards), the Gopher rules removed `2,699,978` records (`3.09%`), harmful-content filtering removed `41,702` records (`0.048%`), and `25` records were empty after stripping. PII masking did not discard documents, but it modified `3,081,461` kept documents, which is `33.94%` of the stage-1 kept set.
+
+The deduplication stage then processed the `9,080,206` stage-1 kept documents. Exact-line deduplication indexed `1,304,532,231` line instances and removed `1,054,738,707` repeated line instances (`80.85%` of line instances); after this line removal, `452,581` documents became empty and were discarded. MinHash deduplication generated `132,904` candidate duplicate pairs, confirmed `15,287` duplicate pairs, and removed `6,355` additional documents. The final filtered dataset contains `8,621,270` documents, or `8.95%` of the original WET records.
 
 ### (b)
 **Question:** How long does it take to filter the 5,000 WET files? How long would it take to filter the entire Common Crawl dump (100,000 WETs)?
 
 **Deliverable:** Runtime of the data filtering pipeline.
 
-**Answer:** TODO
+**Answer:** Excluding Common Crawl download time, filtering the 5,000 WET files took about `33,688.90` seconds, or `9.36` hours, on our self-hosted server. Stage 1, which applied the document-level WET filters bucket by bucket with `24` workers, took `13,203.16` seconds (`3.67` hours) of summed bucket filtering time. Stage 2, which performed global exact-line deduplication and MinHash/LSH near-deduplication, took `20,485.74` seconds (`5.69` hours) with `40` workers. The stage-2 runtime was dominated by MinHash signature preprocessing, which took `17,672.26` seconds (`4.91` hours); LSH candidate generation took another `1,484.43` seconds (`0.41` hours), while the remaining exact-dedup and write-back phases were much smaller.
+
+A simple linear extrapolation from `5,000` to `100,000` WET files multiplies the observed filtering time by `20`, giving about `187.16` hours, or `7.80` days, on similar hardware with the same staged pipeline. We treat this as an order-of-magnitude estimate rather than a guaranteed wall-clock schedule, because our self-hosted download time is network-dependent and not included here, and because larger runs may shift the bottleneck between CPU, memory, and disk I/O.
 
 ---
 
@@ -170,37 +176,39 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** Five random examples from the final filtered data, plus a 1-2 sentence description of each example and whether it is worthwhile to use for language modeling.
 
-**Answer:** TODO
+**Answer:** We sampled five examples from the final stage-2 deduplicated dataset using seed `336`. Overall, the sample suggests that the filtered dataset contains several useful long-form or semi-long-form English documents, but it still admits some web boilerplate and commercial navigation text.
 
 | Example | Excerpt | Description | Worth keeping? |
 | --- | --- | --- | --- |
-| 1 | TODO | TODO | TODO |
-| 2 | TODO | TODO | TODO |
-| 3 | TODO | TODO | TODO |
-| 4 | TODO | TODO | TODO |
-| 5 | TODO | TODO | TODO |
+| 1 | `Exodus 20:22 ... Bible Commentary` | A Bible verse page with parallel translations and commentary. It is fluent English, but it is repetitive and domain-specific. | Borderline yes: useful as clean English text, but less representative of broad C4-style web domains. |
+| 2 | `Manyavar Store in Kankurgachi ... Choose your Shipping Country` | An e-commerce/store page dominated by menus, product categories, and shipping/navigation text. | Mostly no: this is the clearest kept-sample failure, since it is mostly boilerplate rather than natural prose. |
+| 3 | `Massachusetts Man Found Guilty ... Capitol Breach` | A news/legal article about a Capitol breach case, with coherent factual prose. | Yes: this is the kind of article-like web text that should help broad-domain language modeling. |
+| 4 | `Tips for Hiring Your First Employee` | A business/entrepreneurship tag page containing short article summaries about hiring and performance reviews. | Yes, with caveats: it has some index-page structure, but the retained text is mostly readable topical prose. |
+| 5 | `John Hendricks ... co-founded Strike Source` | A biographical page with coherent sentences about a media/news figure and related work. | Yes: this is relatively clean English prose and seems suitable for language modeling. |
 
 ### (b)
 **Question:** Take five CC WETs that were removed and/or modified by your filtering script. What part of your filtering process removed or modified these documents, and do you think that their removal and/or modification was justified?
 
 **Deliverable:** Five random discarded examples from the original WETs, plus a 1-2 sentence description of each example and whether its removal was justified.
 
-**Answer:** TODO
+**Answer:** The five sampled removed/modified examples from the review logs were all dropped by stage-2 exact-line deduplication with reason `exact_line_dedup_empty`: after globally repeated lines were removed, no useful unique text remained. This makes the examples especially helpful for checking whether exact-line dedup is removing boilerplate rather than discarding unique prose.
 
 | Example | Excerpt | Removed/modified by | Was it justified? |
 | --- | --- | --- | --- |
-| 1 | TODO | TODO | TODO |
-| 2 | TODO | TODO | TODO |
-| 3 | TODO | TODO | TODO |
-| 4 | TODO | TODO | TODO |
-| 5 | TODO | TODO | TODO |
+| 1 | `Diversity Equity Inclusion Belonging Archives ... About Overview` | `exact_line_dedup_empty` | Yes. The page is mostly repeated school navigation, portals, calendars, and menu boilerplate, so dropping it should improve the training set. |
+| 2 | `Introducing Manulife InvestChoice ... Our funds` | `exact_line_dedup_empty` | Yes. The sampled text is dominated by fund-site navigation, login prompts, role selectors, and repeated headings rather than article content. |
+| 3 | `Default Web Site Page ... SORRY!` | `exact_line_dedup_empty`; the PII masker also replaced an email address with `\|\|\|EMAIL_ADDRESS\|\|\|` before the final drop. | Yes. This is a generic cPanel default page and not useful natural web content for the target benchmark. |
+| 4 | `cybersecuritysymposium.com is for sale` | `exact_line_dedup_empty`; the PII masker also replaced a phone number with `\|\|\|PHONE_NUMBER\|\|\|` before the final drop. | Yes. It is a parked-domain sales page with prices, transaction boilerplate, and support text. |
+| 5 | `Mansur – male gyrfalcon ... Sponsorship Bronze` | `exact_line_dedup_empty` | Mostly yes, but this is the most borderline removal. It includes a little animal-description prose, but the page is mixed with sponsorship/product-template text and was not unique after exact-line deduplication. |
 
 ### (c)
 **Question:** If your analysis above motivates further changes to your data pipeline, report any changes and/or iterations of data that you experimented with.
 
 **Deliverable:** A description of data changes and/or iterations that you experimented with.
 
-**Answer:** TODO
+**Answer:** This inspection did not motivate a final change to the filtering thresholds or deduplication semantics. The kept Manyavar store page shows that some e-commerce and navigation boilerplate still leaks through, so a future iteration could add a stronger navigation/catalog-page filter or domain/template heuristic. However, changing the final pipeline at this point would also risk removing legitimate short article index pages such as the business-blog sample, and the removed examples suggest that exact-line deduplication is already catching many highly templated pages.
+
+Therefore, we kept the final data pipeline unchanged after this inspection. The main iterations we made for the final run were systems-level and semantics-preserving: improving the stage-2 deduplication storage lifecycle, adding an exact-checkpoint resume path, and verifying with a 50-WET A/B check that the optimized implementation matched the older stage-2 behavior.
 
 ---
 
@@ -211,7 +219,9 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** A script to tokenize and serialize your filtered data, and the number of tokens in your produced dataset.
 
-**Answer:** TODO
+**Answer:** We used `scripts/tokenize_filtered_data.py` to tokenize the final stage-2 deduplicated JSONL files with the GPT-2 tokenizer. The script reads the `text` field from each document, tokenizes in batches of `256`, appends the GPT-2 EOS token (`50256`) after each document, and serializes the resulting token stream as a `uint16` binary file. This is safe for GPT-2 because the tokenizer length is `50,257`, so every token id fits in `uint16`.
+
+The final tokenized dataset contains `8,621,270` documents and `9,125,412,810` tokens. The serialized output was written to `filtered_train_gpt2.bin` with size `18,250,825,620` bytes (`17.00` GiB), and the tokenization run took `6,341.76` seconds (`1.76` hours).
 
 ---
 
@@ -222,4 +232,26 @@ High-quality example first appeared at: record 2
 
 **Deliverable:** The best validation loss that was recorded, the associated learning curve, and a description of what you did.
 
-**Answer:** TODO
+**Answer:** We trained the provided GPT-2-small-shaped model using `cs336-basics/scripts/train.py` on our final GPT-2-tokenized filtered Common Crawl dataset. We used the current assignment code default of `100,000` training steps, which follows the `1.0.4` changelog update that halved the leaderboard training tokens from the older `200,000`-step handout text. The run used `2` H800 GPUs with PyTorch DDP, `train_batch_size=128` per device, `eval_interval=2000`, `eval_iterations=1000`, `bfloat16` autocast, `torch.compile=True`, and the provided cosine learning-rate schedule with `lr=1e-3`, `min_lr=1e-4`, and `warmup_ratio=0.01`.
+
+The run completed successfully in about `10h 26m`, from `2026-04-12T21:33:49+08:00` to `2026-04-13T08:00:14+08:00`. The best validation loss was `3.2873942852020264`, achieved at the final step, `100000`. The final model checkpoint was written on the remote server to `/root/autodl-tmp/training/filtered_cc_5000_train_hopper_100k_20260412_213349/model.pt`, but we do not archive it in the repository because it is a large generated artifact (`619M`).
+
+![Training curves](artifacts/ch4/training_run/training_curves.svg)
+
+The full validation-loss curve is archived in `artifacts/ch4/training_run/validation_curve.json` and `artifacts/ch4/training_run/validation_curve.md`. A compact view of the curve is:
+
+| Step | Validation loss |
+| --- | --- |
+| 2,000 | 4.133134365081787 |
+| 10,000 | 3.6869091987609863 |
+| 20,000 | 3.587442636489868 |
+| 40,000 | 3.495964527130127 |
+| 60,000 | 3.412804126739502 |
+| 80,000 | 3.3297276496887207 |
+| 90,000 | 3.3013429641723633 |
+| 94,000 | 3.2927300930023193 |
+| 96,000 | 3.2933316230773926 |
+| 98,000 | 3.2879934310913086 |
+| 100,000 | 3.2873942852020264 |
+
+The training loss and validation loss both continued improving through the end of training. The validation curve had a small fluctuation around step `96000`, but the final step still gave the best validation loss. The lightweight evidence for this run, including the plotted curve, parsed validation curve, run metadata, final status, and training-log tail, is archived under `artifacts/ch4/training_run/`.

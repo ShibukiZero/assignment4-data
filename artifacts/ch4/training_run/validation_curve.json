@@ -1,0 +1,212 @@
+{
+  "log_path": "/root/autodl-tmp/training/logs/filtered_cc_5000_train_hopper_100k_20260412_213349.log",
+  "eval_interval": 2000,
+  "train_steps": 100000,
+  "num_points": 50,
+  "best": {
+    "step": 100000,
+    "validation_loss": 3.2873942852020264
+  },
+  "points": [
+    {
+      "step": 2000,
+      "validation_loss": 4.133134365081787
+    },
+    {
+      "step": 4000,
+      "validation_loss": 3.889749050140381
+    },
+    {
+      "step": 6000,
+      "validation_loss": 3.785761833190918
+    },
+    {
+      "step": 8000,
+      "validation_loss": 3.7294092178344727
+    },
+    {
+      "step": 10000,
+      "validation_loss": 3.6869091987609863
+    },
+    {
+      "step": 12000,
+      "validation_loss": 3.656510829925537
+    },
+    {
+      "step": 14000,
+      "validation_loss": 3.635868787765503
+    },
+    {
+      "step": 16000,
+      "validation_loss": 3.6148736476898193
+    },
+    {
+      "step": 18000,
+      "validation_loss": 3.602938175201416
+    },
+    {
+      "step": 20000,
+      "validation_loss": 3.587442636489868
+    },
+    {
+      "step": 22000,
+      "validation_loss": 3.578746795654297
+    },
+    {
+      "step": 24000,
+      "validation_loss": 3.5665361881256104
+    },
+    {
+      "step": 26000,
+      "validation_loss": 3.553208112716675
+    },
+    {
+      "step": 28000,
+      "validation_loss": 3.5454511642456055
+    },
+    {
+      "step": 30000,
+      "validation_loss": 3.5378572940826416
+    },
+    {
+      "step": 32000,
+      "validation_loss": 3.5325911045074463
+    },
+    {
+      "step": 34000,
+      "validation_loss": 3.521554708480835
+    },
+    {
+      "step": 36000,
+      "validation_loss": 3.511646032333374
+    },
+    {
+      "step": 38000,
+      "validation_loss": 3.505000114440918
+    },
+    {
+      "step": 40000,
+      "validation_loss": 3.495964527130127
+    },
+    {
+      "step": 42000,
+      "validation_loss": 3.490434408187866
+    },
+    {
+      "step": 44000,
+      "validation_loss": 3.479334831237793
+    },
+    {
+      "step": 46000,
+      "validation_loss": 3.469355821609497
+    },
+    {
+      "step": 48000,
+      "validation_loss": 3.4608325958251953
+    },
+    {
+      "step": 50000,
+      "validation_loss": 3.453763484954834
+    },
+    {
+      "step": 52000,
+      "validation_loss": 3.4445064067840576
+    },
+    {
+      "step": 54000,
+      "validation_loss": 3.436774969100952
+    },
+    {
+      "step": 56000,
+      "validation_loss": 3.427255868911743
+    },
+    {
+      "step": 58000,
+      "validation_loss": 3.4215569496154785
+    },
+    {
+      "step": 60000,
+      "validation_loss": 3.412804126739502
+    },
+    {
+      "step": 62000,
+      "validation_loss": 3.406653881072998
+    },
+    {
+      "step": 64000,
+      "validation_loss": 3.3957901000976562
+    },
+    {
+      "step": 66000,
+      "validation_loss": 3.3866653442382812
+    },
+    {
+      "step": 68000,
+      "validation_loss": 3.378997802734375
+    },
+    {
+      "step": 70000,
+      "validation_loss": 3.3690738677978516
+    },
+    {
+      "step": 72000,
+      "validation_loss": 3.362206220626831
+    },
+    {
+      "step": 74000,
+      "validation_loss": 3.3560845851898193
+    },
+    {
+      "step": 76000,
+      "validation_loss": 3.3467001914978027
+    },
+    {
+      "step": 78000,
+      "validation_loss": 3.33847713470459
+    },
+    {
+      "step": 80000,
+      "validation_loss": 3.3297276496887207
+    },
+    {
+      "step": 82000,
+      "validation_loss": 3.3250021934509277
+    },
+    {
+      "step": 84000,
+      "validation_loss": 3.3187122344970703
+    },
+    {
+      "step": 86000,
+      "validation_loss": 3.314434289932251
+    },
+    {
+      "step": 88000,
+      "validation_loss": 3.308788299560547
+    },
+    {
+      "step": 90000,
+      "validation_loss": 3.3013429641723633
+    },
+    {
+      "step": 92000,
+      "validation_loss": 3.2974746227264404
+    },
+    {
+      "step": 94000,
+      "validation_loss": 3.2927300930023193
+    },
+    {
+      "step": 96000,
+      "validation_loss": 3.2933316230773926
+    },
+    {
+      "step": 98000,
+      "validation_loss": 3.2879934310913086
+    },
+    {
+      "step": 100000,
+      "validation_loss": 3.2873942852020264
+    }
+  ]
+}

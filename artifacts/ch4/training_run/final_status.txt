@@ -1,0 +1,51 @@
+status=success
+finished_at=2026-04-13T08:00:14+08:00
+run_name=filtered_cc_5000_train_hopper_100k_20260412_213349
+training_exit_status=0
+training_log=/root/autodl-tmp/training/logs/filtered_cc_5000_train_hopper_100k_20260412_213349.log
+model_output=/root/autodl-tmp/training/filtered_cc_5000_train_hopper_100k_20260412_213349
+artifact_dir=/root/pycharm_project/.agents/logs/training/filtered_cc_5000_train_hopper_100k_20260412_213349
+model_checkpoint=/root/autodl-tmp/training/filtered_cc_5000_train_hopper_100k_20260412_213349/model.pt
+model_config=/root/autodl-tmp/training/filtered_cc_5000_train_hopper_100k_20260412_213349/model_config.json
+validation_curve_json=/root/pycharm_project/.agents/logs/training/filtered_cc_5000_train_hopper_100k_20260412_213349/validation_curve.json
+validation_curve_md=/root/pycharm_project/.agents/logs/training/filtered_cc_5000_train_hopper_100k_20260412_213349/validation_curve.md
+
+# Disk
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/md0         50G   30G   21G  59% /root/autodl-tmp
+
+# Key file sizes
+-rw-r--r-- 1 root root  17G Apr 12 19:16 /root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746/tokenized/filtered_train_gpt2.bin
+-rw-r--r-- 1 root root  19M Apr  8 22:46 /root/autodl-tmp/tokenized/tokenized_paloma_c4_100_domains_validation.bin
+-rw-r--r-- 1 root root 619M Apr 13 08:00 /root/autodl-tmp/training/filtered_cc_5000_train_hopper_100k_20260412_213349/model.pt
+-rw-r--r-- 1 root root  162 Apr 12 21:33 /root/autodl-tmp/training/filtered_cc_5000_train_hopper_100k_20260412_213349/model_config.json
+
+# Output sizes
+619M	/root/autodl-tmp/training/filtered_cc_5000_train_hopper_100k_20260412_213349
+564K	/root/pycharm_project/.agents/logs/training/filtered_cc_5000_train_hopper_100k_20260412_213349
+
+# Last GPU snapshot
+Mon Apr 13 08:00:14 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.65.06              Driver Version: 580.65.06      CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA H800 PCIe               On  |   00000000:39:00.0 Off |                  Off |
+| N/A   52C    P0             99W /  350W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA H800 PCIe               On  |   00000000:BB:00.0 Off |                  Off |
+| N/A   34C    P0             87W /  350W |       0MiB /  81559MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
