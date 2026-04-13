@@ -28,6 +28,10 @@ Do not copy large data products into the repository:
 
 Keep those on the data disk or delete them after the smaller evidence files and final tokenized artifact are safely handled.
 
+## Training Run
+
+The `training_run/` directory contains lightweight evidence for the final GPT-2-small-shaped training run used in the `train_model` writeup section: the SVG learning curve, parsed validation-loss JSON/Markdown, run metadata, final status, and configuration snapshots. It intentionally excludes the full model checkpoint, the full training log, and tokenized `.bin` files.
+
 ## Remote-Only Checks
 
 These are better checked on the server terminal rather than stored in git:

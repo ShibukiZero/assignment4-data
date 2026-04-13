@@ -1,0 +1,18 @@
+{
+  "training_log": "/root/autodl-tmp/training/logs/filtered_cc_5000_train_hopper_100k_20260412_213349.log",
+  "validation_curve": "/root/pycharm_project/.agents/logs/training/filtered_cc_5000_train_hopper_100k_20260412_213349/validation_curve.json",
+  "output_svg": "/root/pycharm_project/.agents/logs/training/filtered_cc_5000_train_hopper_100k_20260412_213349/training_curves.svg",
+  "train_steps": 100000,
+  "train_loss_points_raw": 100000,
+  "train_loss_points_plotted": 2000,
+  "validation_points": 50,
+  "best_validation": {
+    "step": 100000,
+    "validation_loss": 3.2873942852020264
+  },
+  "lr": {
+    "max_lr": 0.001,
+    "min_lr": 0.0001,
+    "warmup_ratio": 0.01
+  }
+}

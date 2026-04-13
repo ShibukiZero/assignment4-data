@@ -232,4 +232,26 @@ The final tokenized dataset contains `8,621,270` documents and `9,125,412,810` t
 
 **Deliverable:** The best validation loss that was recorded, the associated learning curve, and a description of what you did.
 
-**Answer:** TODO
+**Answer:** We trained the provided GPT-2-small-shaped model using `cs336-basics/scripts/train.py` on our final GPT-2-tokenized filtered Common Crawl dataset. We used the current assignment code default of `100,000` training steps, which follows the `1.0.4` changelog update that halved the leaderboard training tokens from the older `200,000`-step handout text. The run used `2` H800 GPUs with PyTorch DDP, `train_batch_size=128` per device, `eval_interval=2000`, `eval_iterations=1000`, `bfloat16` autocast, `torch.compile=True`, and the provided cosine learning-rate schedule with `lr=1e-3`, `min_lr=1e-4`, and `warmup_ratio=0.01`.
+
+The run completed successfully in about `10h 26m`, from `2026-04-12T21:33:49+08:00` to `2026-04-13T08:00:14+08:00`. The best validation loss was `3.2873942852020264`, achieved at the final step, `100000`. The final model checkpoint was written on the remote server to `/root/autodl-tmp/training/filtered_cc_5000_train_hopper_100k_20260412_213349/model.pt`, but we do not archive it in the repository because it is a large generated artifact (`619M`).
+
+![Training curves](artifacts/ch4/training_run/training_curves.svg)
+
+The full validation-loss curve is archived in `artifacts/ch4/training_run/validation_curve.json` and `artifacts/ch4/training_run/validation_curve.md`. A compact view of the curve is:
+
+| Step | Validation loss |
+| --- | --- |
+| 2,000 | 4.133134365081787 |
+| 10,000 | 3.6869091987609863 |
+| 20,000 | 3.587442636489868 |
+| 40,000 | 3.495964527130127 |
+| 60,000 | 3.412804126739502 |
+| 80,000 | 3.3297276496887207 |
+| 90,000 | 3.3013429641723633 |
+| 94,000 | 3.2927300930023193 |
+| 96,000 | 3.2933316230773926 |
+| 98,000 | 3.2879934310913086 |
+| 100,000 | 3.2873942852020264 |
+
+The training loss and validation loss both continued improving through the end of training. The validation curve had a small fluctuation around step `96000`, but the final step still gave the best validation loss. The lightweight evidence for this run, including the plotted curve, parsed validation curve, run metadata, final status, and training-log tail, is archived under `artifacts/ch4/training_run/`.

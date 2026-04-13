@@ -1,0 +1,16 @@
+# @package _global_
+
+paths:
+  # Set to your data, tokenized with GPT-2 tokenizer!
+  train_bin: /root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746/tokenized/filtered_train_gpt2.bin
+  
+  # Paloma C4 100 domains validation set, tokenized with the GPT-2 tokenizer.
+  valid_bin: /root/autodl-tmp/tokenized/tokenized_paloma_c4_100_domains_validation.bin
+  
+  model_output: /root/autodl-tmp/training/filtered_cc_5000
+
+training:
+  # Override these on the command line if you want W&B logging, e.g.
+  # training.wandb_entity=<your-entity> training.wandb_project=cs336-data
+  wandb_entity: null
+  wandb_project: null
