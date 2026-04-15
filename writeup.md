@@ -1,30 +1,42 @@
 ## Problem `look_at_cc`: Looking at the Data (4 points)
 
 ### (a)
-**Question:** Download the WARC file above, or find the copy we provide on the cluster. Look at the very first web page in the file. What is its URL? Is it still accessible? Can you tell what the page seems to be about by looking at the raw HTML?
+**Question:** Download the WARC file above, or find the copy we provide on the cluster. Let’s look at the first page in this file. This is a gzipped file, and you can browse its contents with:
+
+`$ zcat /data/CC/example.warc.gz | less`
+
+`less` lets you browse the file using keyboard arrows, Page Up, Page Down. To exit, press “q”.
+
+Look at the very first web page. What is its URL? Is it still accessible? Can you tell what the page seems to be about by looking at the raw HTML?
 
 **Deliverable:** A 2-3 sentence response.
 
 **Answer:** The first web page in the WARC file is `http://0371rykj.com/ipfhsb/34.html`. When I checked it on April 9, 2026, it was still accessible, although it redirected to `http://www.0371rykj.com/ipfhsb/34.html` before returning `200 OK`. From the raw HTML, the page appears to be a Chinese industrial equipment company page, but its title and meta tags look inconsistent with the body content and appear to contain suspicious keyword stuffing, which suggests that the page may be polluted by SEO spam or other low-quality web content.
 
 ### (b)
-**Question:** Look at the corresponding WET file. Are there parts of the extracted text that should have been filtered out by the extractor? What might go wrong when training a model on text that looks like this? Conversely, what useful information can a model potentially extract from this page?
+**Question:** Let’s now look at the corresponding WET file:
+
+`$ zcat /data/CC/example.warc.wet.gz | less`
+
+Note that the WET files contain HTTP headers (e.g., Content-Length) that are not part of the extracted text contents. If you look at the first example, you will see that it contains text that was extracted from the raw HTML you just saw.
+
+Notice that much of the extracted text is reminiscent of the HTML structure, and not actually the page’s main content. Are there parts of the text you see that you think should have been filtered out by the extractor? Think about the quality of this text as training data: what might go wrong in training a model on text that looks like this? Conversely, what useful information can a model potentially extract from this page?
 
 **Deliverable:** A 3-4 sentence response.
 
 **Answer:** Yes. The extracted text still contains a lot of content that should likely have been filtered out, including spammy keyword strings at the top, navigation items, contact information, repeated category lists, and footer-like boilerplate such as previous/next links and copyright text. Training on text like this could cause a model to learn low-value webpage templates, keyword stuffing, and repetitive site-specific fragments instead of clean natural language. At the same time, the page still contains some useful information, such as the company name, the product description, and technical specifications for the equipment, which could help the model learn domain-specific vocabulary and factual technical language.
 
 ### (c)
-**Question:** Describe an application domain for which this example might be useful to have in the training data, and one where it might not be.
+**Question:** What makes a good training example is highly contextual. Describe an application domain for which this example might be useful to have in the training data, and one where it might not be.
 
 **Deliverable:** A 1-2 sentence response.
 
 **Answer:** This example could be useful for a domain-specific system focused on Chinese industrial equipment, product catalogs, or technical retrieval, because it contains real company information, product descriptions, and equipment specifications. It would be much less suitable for training a general-purpose user-facing language model, since the page also contains spammy keywords, boilerplate navigation text, and other low-quality web artifacts.
 
 ### (d)
-**Question:** Look through 25 more WET records. For each record, briefly comment on the document's language, domain name, page type, and any other notable observations. How many examples does it take until you see what you would deem a high-quality webpage?
+**Question:** Let’s look at some more examples to get a better sense of what’s in the Common Crawl. Look through 25 more WET records. For each record, very briefly comment on the document’s language (if you can identify it), the domain name, what type of page it is, etc. How many examples does it take until you see what you’d deem a “high-quality” webpage?
 
-**Deliverable:** Brief annotations of 25 documents, plus the number of examples it takes until you see a high-quality example.
+**Deliverable:** Brief annotations of 25 documents with the document’s language, domain, type of page, and any other miscellaneous notes about the document. The number of examples it takes until you see a high-quality example.
 
 **Answer:** The first clearly high-quality webpage appeared at record 2, which is the USNCCM13 conference homepage. Many of the other early examples are dominated by spam, adult content, templated portals, error pages, or low-value navigation-heavy pages, although a few later records are also reasonably high-quality informational pages.
 
@@ -65,7 +77,7 @@ High-quality example first appeared at: record 2
 ### (b)
 **Question:** Run your text extraction function on a single WARC file. Compare its output to the extracted text in the corresponding WET file. What differences and/or similarities do you notice? Which extraction seems better?
 
-**Deliverable:** A 2-3 sentence response comparing and contrasting the two extracted texts.
+**Deliverable:** 2-3 sentence response comparing and contrasting the text extracted by your own function versus the extracted text in the WET files.
 
 **Answer:** Our extraction and the Common Crawl WET output recover much of the same underlying page content, including the product-related text and some of the same spammy or low-quality material. However, our extraction is much noisier: it preserves many HTML-structure artifacts, bullets, and template-like fragments that make the text substantially longer and less readable. For this example, the WET extraction seems better overall, because it is more compact and cleaner, even though it still retains some undesirable boilerplate.
 
@@ -74,23 +86,23 @@ High-quality example first appeared at: record 2
 ## Problem `language_identification`: Language Identification (6 points)
 
 ### (a)
-**Question:** Write a function that takes a Unicode string and identifies the main language present in the string. Your function should return a pair containing a language identifier and a confidence score between 0 and 1.
+**Question:** Write a function that will take a Unicode string and identify the main language that is present in this string. Your function should return a pair, containing an identifier of the language and a score between 0 and 1 representing its confidence in that prediction.
 
-**Deliverable:** A function that performs language identification, giving its top language prediction and a score.
+**Deliverable:** A function that performs language identification, giving its top language prediction and a score. Implement the adapter [run_identify_language] and make sure it passes both tests in uv run pytest -k test_identify_language . Note that these tests assume a particular string identifier for English (“en”) and Chinese (“zh”), so your test adapter should perform any applicable re-mapping, if necessary.
 
 **Answer:** We use the pre-trained fastText `lid.176.bin` language identification model. Our function returns the top language prediction and its confidence score, with adapter-side label normalization for outputs such as `en` and `zh`.
 
 ---
 
 ### (b)
-**Question:** What issues could arise downstream from problems in the language identification procedure? In a higher-stakes scenario, how would you mitigate these issues?
+**Question:** The behavior of language models at inference time largely depends on the data they were trained on. As a result, issues in the data filtering pipeline can result in problems downstream. What issues do you think could arise from problems in the language identification procedure? In a higher-stakes scenario (such as when deploying a user-facing product), how would you go about mitigating these issues?
 
 **Deliverable:** A 2-5 sentence response.
 
 **Answer:** Errors in language identification can distort the training distribution in both directions: false positives can let non-target-language pages, mixed-language pages, or noisy template text into the dataset, while false negatives can remove useful in-language documents and reduce coverage of important domains or dialects. As a result, the final language model may generate more mixed-language or low-quality text, and it may underperform on legitimate examples that were filtered out too aggressively. In a higher-stakes setting, I would not rely on a single hard language-ID decision alone; instead, I would combine confidence thresholds, manual audits of borderline cases, and additional signals such as document length or character distribution, while also monitoring downstream behavior for systematic errors.
 
 ### (c)
-**Question:** Run your language identification system on text extracted from the WARC files. Manually identify the language in 20 random examples and compare your labels with the classifier predictions. Report any classifier errors. What fraction of documents are English? Based on your observations, what would be a suitable classifier confidence threshold to use in filtering?
+**Question:** Run your language identification system on text extracted from the WARC files (via your previously-implemented text extraction function). Manually identify the language in 20 random examples and compare your labels with the classifier predictions. Report any classifier errors. What fraction of documents are English? Based on your observations, what would be a suitable classifier confidence threshold to use in filtering?
 
 **Deliverable:** A 2-5 sentence response.
 
@@ -101,14 +113,14 @@ High-quality example first appeared at: record 2
 ## Problem `mask_pii`: Personal Identifiable Information (3 points)
 
 ### (4)
-**Question:** What problems might arise downstream in a language model when these filters are naively applied on the training set? How might you mitigate these issues?
+**Question:** What problems do you think might arise downstream in a language model when these filters are naïvely applied on the training set? How might you mitigate these issues?
 
 **Deliverable:** A 2-5 sentence response.
 
 **Answer:** Naive PII masking can fail in both directions: it can miss real sensitive information, but it can also over-mask benign text such as code, configuration strings, example data, or technical documentation that happens to resemble an email address, phone number, or IP address. Excessive masking can also damage useful semantics by replacing information that is important for understanding customer support text, networking tutorials, or contact instructions, and it may cause the model to overproduce artificial placeholder strings. To mitigate these issues, I would combine conservative pattern design with manual audits, inspect false positives and false negatives on real web data, and use context-aware or document-type-aware rules when possible instead of relying on a single broad regex alone.
 
 ### (5)
-**Question:** Run your PII masking functions on text extracted from the WARC files. Look through 20 random examples where a replacement was made; give some examples of false positives and false negatives.
+**Question:** Run your PII masking functions on text extracted from the WARC files (via your previouslyimplemented text extraction function). Look through 20 random examples where a replacement was made; give some examples of false positives and false negatives.
 
 **Deliverable:** A 2-5 sentence response.
 
@@ -119,14 +131,14 @@ High-quality example first appeared at: record 2
 ## Problem `harmful_content`: Harmful Content (6 points)
 
 ### (3)
-**Question:** What problems might arise downstream in a language model when these filters are applied to create the training set? How might you mitigate these issues?
+**Question:** What problems do you think might arise downstream in a language model when these filters are applied to create the training set? How might you mitigate these issues?
 
 **Deliverable:** A 2-5 sentence response.
 
 **Answer:** Harmful-content filtering can fail in both directions: it can miss genuinely toxic or NSFW material, but it can also remove legitimate text that discusses these topics in educational, journalistic, policy, or support contexts. If applied too aggressively, such filtering can distort the training distribution, disproportionately remove some styles or communities, and even make the model worse at recognizing, discussing, or safely responding to harmful content because it has seen too little of it in context. To mitigate this, I would avoid relying on a single hard classifier decision, combine confidence thresholds with manual audits of borderline cases, and distinguish between text that merely mentions harmful content and text that is itself primarily harmful.
 
 ### (4)
-**Question:** Run your harmful-content filters on text extracted from the WARC files. Look through 20 random examples and compare the classifier predictions to your own judgments. Report any classifier errors. What fraction of documents are harmful? Based on your observations, what would be suitable classifier confidence threshold(s) to use in filtering?
+**Question:** Run your harmful content filters on text extracted from the WARC files (via your previouslyimplemented text extraction function). Look through 20 random examples and compare the classifier predictions to your own judgments. Report any classifier errors. What fraction of documents are harmful? Based on your observations, what would be suitable classifier confidence threshold(s) to use in filtering?
 
 **Deliverable:** A 2-5 sentence response.
 
@@ -137,7 +149,7 @@ High-quality example first appeared at: record 2
 ## Problem `gopher_quality_filters`: Quality Rules (3 points)
 
 ### (b)
-**Question:** Run your rule-based quality filter on text extracted from the WARC files. Look through 20 random examples and compare the filter predictions to your own judgment. Comment on any cases where the quality filters differ from your judgments.
+**Question:** Run your rule-based quality filter on text extracted from the WARC files (via your previouslyimplemented text extraction function). Look through 20 random examples and compare the filter predictions to your own judgment. Comment on any cases where the quality filters differ from your judgments.
 
 **Deliverable:** A 2-5 sentence response.
 
@@ -148,7 +160,11 @@ High-quality example first appeared at: record 2
 ## Problem `filter_data`: Filter Data for Language Modeling (6 points)
 
 ### (a)
-**Question:** Write a script to filter language modeling data from the provided Common Crawl WET files in parallel. Report the number of examples kept by each filter that you use, so you have a sense of how the filters contribute to the final output data.
+**Question:** Write a script to filter language modeling data from a collection of Common Crawl WET files (located at /data/CC/CC*.warc.wet.gz on the Together cluster). You are free to apply any of the primitives we’ve implemented in earlier parts of the assignment, and you’re also free to explore other filters and methods for generating data (e.g., filtering based on n-gram language model perplexity). Your goal is to produce data that, when trained on, minimizes the perplexity on the C4 100 domains subset of the Paloma benchmark.
+
+Again, we note that you are allowed to make use of the Paloma validation data in constructing filters or classifiers to process the CC WET files, but are not allowed to literally copy any of the validation data into your training data.
+
+Your script should report the number of examples kept by each filter that you’ve used, so you have a sense of how the filters are contributing to the final output data.
 
 **Deliverable:** A script (or sequence of scripts) that filters the provided CC WET files in parallel to produce language modeling data. A written breakdown of what proportion of the discarded examples are removed by each filter step.
 
@@ -172,9 +188,9 @@ A simple linear extrapolation from `5,000` to `100,000` WET files multiplies the
 ## Problem `inspect_filtered_data`: Inspect Filtered Data (4 points)
 
 ### (a)
-**Question:** Take five random examples from your filtered dataset. Comment on their quality and whether they would be suitable for language modeling, especially given that the goal is to minimize perplexity on the C4 100 domains benchmark.
+**Question:** Take five random examples from your filtered dataset. Comment on their quality and whether or not they’d be suitable for language modeling, especially given that our goal is to minimize perplexity on the C4 100 domains benchmark.
 
-**Deliverable:** Five random examples from the final filtered data, plus a 1-2 sentence description of each example and whether it is worthwhile to use for language modeling.
+**Deliverable:** Five random examples from the final filtered data. Only showing pertinent excerpts of the data is fine, since the documents may be lengthy. For each example, a 1-2 sentence description of the example and whether or not it’s worthwhile to use for language modeling.
 
 **Answer:** We sampled five examples from the final stage-2 deduplicated dataset using seed `336`. Overall, the sample suggests that the filtered dataset contains several useful long-form or semi-long-form English documents, but it still admits some web boilerplate and commercial navigation text.
 
@@ -189,7 +205,7 @@ A simple linear extrapolation from `5,000` to `100,000` WET files multiplies the
 ### (b)
 **Question:** Take five CC WETs that were removed and/or modified by your filtering script. What part of your filtering process removed or modified these documents, and do you think that their removal and/or modification was justified?
 
-**Deliverable:** Five random discarded examples from the original WETs, plus a 1-2 sentence description of each example and whether its removal was justified.
+**Deliverable:** Five random discarded examples from the original WETs. Only showing pertinent excerpts of the data is fine, since the documents may be lengthy. For each example, a 1-2 sentence description of the example and whether or not its removal was justified.
 
 **Answer:** The five sampled removed/modified examples from the review logs were all dropped by stage-2 exact-line deduplication with reason `exact_line_dedup_empty`: after globally repeated lines were removed, no useful unique text remained. This makes the examples especially helpful for checking whether exact-line dedup is removing boilerplate rather than discarding unique prose.
 
@@ -202,7 +218,7 @@ A simple linear extrapolation from `5,000` to `100,000` WET files multiplies the
 | 5 | `Mansur – male gyrfalcon ... Sponsorship Bronze` | `exact_line_dedup_empty` | Mostly yes, but this is the most borderline removal. It includes a little animal-description prose, but the page is mixed with sponsorship/product-template text and was not unique after exact-line deduplication. |
 
 ### (c)
-**Question:** If your analysis above motivates further changes to your data pipeline, report any changes and/or iterations of data that you experimented with.
+**Question:** If your analysis above motivates further changes to your data pipeline, feel free to make those changes before training your model. Report any changes and/or iterations of data that you experimented with.
 
 **Deliverable:** A description of data changes and/or iterations that you experimented with.
 
@@ -215,7 +231,9 @@ Therefore, we kept the final data pipeline unchanged after this inspection. The 
 ## Problem `tokenize_data`: Tokenize Data (2 points)
 
 ### Token count
-**Question:** How many tokens are in your filtered dataset?
+**Question:** Write a script to tokenize and serialize your filtered data. Make sure to serialize following the example code above, with ids_array.tofile(output_path), where ids_array is a np.uint16 numpy array of integer IDs. This ensures compatibility with the provided training script.
+
+How many tokens are in your filtered dataset?
 
 **Deliverable:** A script to tokenize and serialize your filtered data, and the number of tokens in your produced dataset.
 
@@ -228,7 +246,7 @@ The final tokenized dataset contains `8,621,270` documents and `9,125,412,810` t
 ## Problem `train_model`: Train Model (2 points)
 
 ### Training result
-**Question:** Train a GPT-2 small-shaped language model on your tokenized dataset. What is the best validation loss that your model achieves? Include the associated learning curve and a description of what you did.
+**Question:** Train a language model (GPT-2 small-shaped) on your tokenized dataset. Periodically measure the validation loss on C4 100 domains (this is already enabled by default in the config at cs336-basics/cs336_basics/train_config.py). What is the best validation loss that your model achieves? Submit this value to the leaderboard.
 
 **Deliverable:** The best validation loss that was recorded, the associated learning curve, and a description of what you did.
 
