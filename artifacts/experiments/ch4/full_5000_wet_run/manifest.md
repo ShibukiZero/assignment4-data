@@ -1,0 +1,127 @@
+# Full Chapter 4 Run Artifact Manifest
+
+- Created at: 2026-04-12T11:22:19Z
+- Run directory: /root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746
+- Archive directory: artifacts/experiments/ch4/full_5000_wet_run
+
+## Remote Sizes
+0	/root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746/raw
+94G	/root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746/stage1
+55G	/root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746/stage2
+50G	/root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746/stage2/deduped_docs
+5.1G	/root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746/stage2/review_logs
+17G	/root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746/tokenized
+
+## Archived Files
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00000.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00001.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00002.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00003.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00004.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00005.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00006.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00007.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00008.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00009.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00010.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00011.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00012.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00013.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00014.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00015.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00016.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00017.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00018.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00019.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00020.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00021.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00022.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00023.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00024.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00025.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00026.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00027.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00028.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00029.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00030.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00031.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00032.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00033.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00034.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00035.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00036.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00037.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00038.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00039.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00040.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00041.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00042.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00043.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00044.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00045.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00046.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00047.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00048.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00049.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00050.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00051.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00052.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00053.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00054.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00055.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00056.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00057.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00058.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00059.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00060.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00061.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00062.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00063.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00064.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00065.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00066.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00067.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00068.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00069.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00070.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00071.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00072.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00073.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00074.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00075.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00076.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00077.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00078.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00079.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00080.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00081.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00082.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00083.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00084.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00085.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00086.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00087.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00088.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00089.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00090.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00091.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00092.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00093.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00094.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00095.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00096.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00097.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00098.json
+artifacts/experiments/ch4/full_5000_wet_run/bucket_summaries/bucket_00099.json
+artifacts/experiments/ch4/full_5000_wet_run/events.jsonl
+artifacts/experiments/ch4/full_5000_wet_run/inspection_samples.md
+artifacts/experiments/ch4/full_5000_wet_run/logs/nohup.log
+artifacts/experiments/ch4/full_5000_wet_run/logs/pipeline.log
+artifacts/experiments/ch4/full_5000_wet_run/logs/stage2_20260412_101538.log
+artifacts/experiments/ch4/full_5000_wet_run/logs/stage2_20260412_114028.log
+artifacts/experiments/ch4/full_5000_wet_run/logs/tokenize_20260412_173054.log
+artifacts/experiments/ch4/full_5000_wet_run/manifest.md
+artifacts/experiments/ch4/full_5000_wet_run/run_manifest.json
+artifacts/experiments/ch4/full_5000_wet_run/stage1/aggregate_summary.json
+artifacts/experiments/ch4/full_5000_wet_run/stage2/aggregate_summary.json
+artifacts/experiments/ch4/full_5000_wet_run/tokenized/filtered_train_gpt2.summary.json

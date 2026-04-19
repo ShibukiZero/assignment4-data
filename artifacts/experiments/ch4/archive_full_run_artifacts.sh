@@ -6,7 +6,7 @@ set -euo pipefail
 # stage-2 deduped text shards, temporary work directories, or tokenized .bin files.
 
 RUN_DIR="${1:-/root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746}"
-ARCHIVE_DIR="${2:-artifacts/ch4/full_5000_wet_run}"
+ARCHIVE_DIR="${2:-artifacts/experiments/ch4/full_5000_wet_run}"
 
 mkdir -p "$ARCHIVE_DIR"/{logs,stage1,stage2,tokenized,bucket_summaries}
 

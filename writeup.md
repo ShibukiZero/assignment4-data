@@ -254,9 +254,9 @@ The final tokenized dataset contains `8,621,270` documents and `9,125,412,810` t
 
 The run completed successfully in about `10h 26m`, from `2026-04-12T21:33:49+08:00` to `2026-04-13T08:00:14+08:00`. The best validation loss was `3.2873942852020264`, achieved at the final step, `100000`. The final model checkpoint was written on the remote server to `/root/autodl-tmp/training/filtered_cc_5000_train_hopper_100k_20260412_213349/model.pt`, but we do not archive it in the repository because it is a large generated artifact (`619M`).
 
-![Training curves](artifacts/ch4/training_run/training_curves.svg)
+![Training curves](artifacts/experiments/ch4/training_run/training_curves.svg)
 
-The full validation-loss curve is archived in `artifacts/ch4/training_run/validation_curve.json` and `artifacts/ch4/training_run/validation_curve.md`. A compact view of the curve is:
+The full validation-loss curve is archived in `artifacts/experiments/ch4/training_run/validation_curve.json` and `artifacts/experiments/ch4/training_run/validation_curve.md`. A compact view of the curve is:
 
 | Step | Validation loss |
 | --- | --- |
@@ -272,4 +272,4 @@ The full validation-loss curve is archived in `artifacts/ch4/training_run/valida
 | 98,000 | 3.2879934310913086 |
 | 100,000 | 3.2873942852020264 |
 
-The training loss and validation loss both continued improving through the end of training. The validation curve had a small fluctuation around step `96000`, but the final step still gave the best validation loss. The lightweight evidence for this run, including the plotted curve, parsed validation curve, run metadata, final status, and training-log tail, is archived under `artifacts/ch4/training_run/`.
+The training loss and validation loss both continued improving through the end of training. The validation curve had a small fluctuation around step `96000`, but the final step still gave the best validation loss. The lightweight evidence for this run, including the plotted curve, parsed validation curve, run metadata, final status, and training-log tail, is archived under `artifacts/experiments/ch4/training_run/`.
