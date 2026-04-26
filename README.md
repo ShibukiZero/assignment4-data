@@ -40,7 +40,7 @@ To submit, run `./test_and_make_submission.sh` . This script will install your
 code's dependencies, run tests, and create a gzipped tarball with the output. We
 should be able to unzip your submitted tarball and run
 `./test_and_make_submission.sh` to verify your test results.
-## Experiment-Specific Notes
+## Dataset Notes
 
 - `Common Crawl`: this repository's full experiment used `5000` randomly sampled WET files from `CC-MAIN-2026-12` rather than the handout's pre-mounted `/data/CC/CC*.warc.wet.gz`.
 - `Wikipedia external links`: this repository used a locally extracted `extracted_urls.txt.gz` built from `enwiki-latest-externallinks.sql.gz`, rather than the handout's `/data/wiki/enwiki-20240420-extracted_urls.txt.gz`.
