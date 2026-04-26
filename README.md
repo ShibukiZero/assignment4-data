@@ -40,3 +40,8 @@ To submit, run `./test_and_make_submission.sh` . This script will install your
 code's dependencies, run tests, and create a gzipped tarball with the output. We
 should be able to unzip your submitted tarball and run
 `./test_and_make_submission.sh` to verify your test results.
+## Dataset Notes
+
+- `Common Crawl`: this repository's full experiment used `5000` randomly sampled WET files from `CC-MAIN-2026-12`, downloaded from Common Crawl.
+- `Wikipedia external links`: this repository used an `extracted_urls.txt.gz` file built from `enwiki-latest-externallinks.sql.gz`, rather than the assignment's fixed extracted URL list.
+- `Paloma`: this repository rebuilt the validation bin from open-source Paloma `c4_100_domains` validation `jsonl.gz` files using the GPT-2 tokenizer.
