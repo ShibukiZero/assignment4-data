@@ -42,7 +42,7 @@ should be able to unzip your submitted tarball and run
 `./test_and_make_submission.sh` to verify your test results.
 ## Dataset Notes
 
-- `Common Crawl`: this repository's full experiment used `5000` randomly sampled WET files from `CC-MAIN-2026-12` rather than the handout's pre-mounted `/data/CC/CC*.warc.wet.gz`.
-- `Wikipedia external links`: this repository used a locally extracted `extracted_urls.txt.gz` built from `enwiki-latest-externallinks.sql.gz`, rather than the handout's `/data/wiki/enwiki-20240420-extracted_urls.txt.gz`.
-- `Paloma`: this repository rebuilt `/root/autodl-tmp/tokenized/tokenized_paloma_c4_100_domains_validation.bin` from local open-source Paloma `c4_100_domains` validation `jsonl.gz` files using the GPT-2 tokenizer, rather than directly using the pre-mounted cluster binary.
+- `Common Crawl`: this repository's full experiment used `5000` randomly sampled WET files from `CC-MAIN-2026-12`, downloaded from Common Crawl.
+- `Wikipedia external links`: this repository used an `extracted_urls.txt.gz` file built from `enwiki-latest-externallinks.sql.gz`, rather than the assignment's fixed extracted URL list.
+- `Paloma`: this repository rebuilt the validation bin from open-source Paloma `c4_100_domains` validation `jsonl.gz` files using the GPT-2 tokenizer.
 - `Training hardware`: the archived final training run used `2 x NVIDIA H800 PCIe (80 GB)` GPUs.
