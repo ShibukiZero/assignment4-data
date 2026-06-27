@@ -11,8 +11,8 @@ from cs336_data.harmful_content import classify_nsfw, classify_toxic_speech
 from cs336_data.html_text import extract_text_from_html_bytes
 
 
-DEFAULT_WARC_PATH = Path("/root/autodl-tmp/raw/cc_samples/example.warc.gz")
-DEFAULT_OUTPUT_DIR = Path(".agents/logs/harmful_content_audit")
+DEFAULT_WARC_PATH = Path("data/raw/cc_samples/example.warc.gz")
+DEFAULT_OUTPUT_DIR = Path("runs/harmful_content_audit")
 
 
 def parse_args() -> argparse.Namespace:

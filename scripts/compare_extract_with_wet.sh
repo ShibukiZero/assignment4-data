@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-warc_path="${1:-/root/autodl-tmp/raw/cc_samples/example.warc.gz}"
-wet_path="${2:-/root/autodl-tmp/raw/cc_samples/example.warc.wet.gz}"
-output_dir="${3:-.agents/logs/extract_text_compare}"
+warc_path="${1:-data/raw/cc_samples/example.warc.gz}"
+wet_path="${2:-data/raw/cc_samples/example.warc.wet.gz}"
+output_dir="${3:-runs/extract_text_compare}"
 
 mkdir -p "$output_dir"
 

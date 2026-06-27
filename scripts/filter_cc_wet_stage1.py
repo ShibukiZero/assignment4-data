@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-glob",
         required=True,
-        help="Glob pattern for WET files, e.g. '/root/autodl-tmp/raw/CC-MAIN-2026-12_wet_sample/*.warc.wet.gz'.",
+        help="Glob pattern for WET files, e.g. 'data/raw/CC-MAIN-2026-12_wet_sample/*.warc.wet.gz'.",
     )
     parser.add_argument(
         "--output-dir",

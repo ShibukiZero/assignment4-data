@@ -17,4 +17,4 @@ This directory archives the evidence currently used by `writeup.md` for the comp
 
 ## Provenance
 
-These files were copied or summarized from temporary working materials under `.agents/logs/` so that the writeup no longer depends on ephemeral collaboration logs.
+These files were copied or summarized from temporary working materials under `runs/` so that the writeup no longer depends on ephemeral collaboration logs.

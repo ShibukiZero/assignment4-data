@@ -19,7 +19,7 @@ def _candidate_model_paths() -> list[Path]:
     candidates.extend(
         [
             Path(__file__).resolve().parent / "assets" / "quality_classifier_fasttext.bin",
-            Path("/root/autodl-tmp/quality_classifier/models/quality_classifier_fasttext.bin"),
+            Path(__file__).resolve().parents[1] / "models" / "quality_classifier_fasttext.bin",
         ]
     )
     return candidates

@@ -13,7 +13,7 @@ def _candidate_model_paths() -> list[Path]:
 
     Check an explicit environment variable first, then fall back to a few
     assignment-specific defaults. This keeps the adapter simple while making it
-    easy to point the code at the remote model file.
+    easy to point the code at a local model file.
     """
 
     candidates: list[Path] = []
@@ -25,8 +25,8 @@ def _candidate_model_paths() -> list[Path]:
     candidates.extend(
         [
             Path(__file__).resolve().parent / "assets" / "lid.176.bin",
+            Path(__file__).resolve().parents[1] / "models" / "lid.176.bin",
             Path("/data/classifiers/lid.176.bin"),
-            Path("/root/autodl-tmp/models/lid.176.bin"),
         ]
     )
     return candidates

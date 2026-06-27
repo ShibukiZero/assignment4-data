@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RAW_GLOB="${1:-/root/autodl-tmp/raw/CC-MAIN-2026-12_wet_sample/*.warc.wet.gz}"
-RUN_DIR="${2:-/root/autodl-tmp/processed/chapter4_50wet_pipeline_$(date +%Y%m%d_%H%M%S)}"
+RAW_GLOB="${1:-data/raw/CC-MAIN-2026-12_wet_sample/*.warc.wet.gz}"
+RUN_DIR="${2:-runs/chapter4_50wet_pipeline_$(date +%Y%m%d_%H%M%S)}"
 
 STAGE1_WORKERS="${STAGE1_WORKERS:-24}"
 STAGE2_WORKERS="${STAGE2_WORKERS:-24}"
 PHASE3_CHUNK_DOCS="${PHASE3_CHUNK_DOCS:-1000}"
-TOKENIZER="${TOKENIZER:-/root/autodl-tmp/tokenizers/gpt2}"
+TOKENIZER="${TOKENIZER:-data/tokenizers/gpt2}"
 TOKENIZE_BATCH_SIZE="${TOKENIZE_BATCH_SIZE:-256}"
 
 STAGE1_DIR="${RUN_DIR}/stage1"

@@ -10,10 +10,10 @@ import numpy as np
 from transformers import AutoTokenizer
 
 
-DEFAULT_INPUT_DIR = Path("/root/autodl-tmp/raw/paloma/c4_100_domains/val")
-DEFAULT_TOKENIZER_DIR = Path("/root/autodl-tmp/tokenizers/gpt2")
-DEFAULT_OUTPUT_PATH = Path("/root/autodl-tmp/tokenized/tokenized_paloma_c4_100_domains_validation.bin")
-DEFAULT_LOG_PATH = Path(".agents/logs/paloma_build/report.json")
+DEFAULT_INPUT_DIR = Path("data/raw/paloma/c4_100_domains/val")
+DEFAULT_TOKENIZER_DIR = Path("data/tokenizers/gpt2")
+DEFAULT_OUTPUT_PATH = Path("data/tokenized/tokenized_paloma_c4_100_domains_validation.bin")
+DEFAULT_LOG_PATH = Path("runs/paloma_build/report.json")
 
 
 @dataclass

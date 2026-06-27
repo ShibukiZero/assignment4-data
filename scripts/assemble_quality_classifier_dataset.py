@@ -8,10 +8,10 @@ from pathlib import Path
 from cs336_data.langid import normalize_text_for_fasttext
 
 
-DEFAULT_POSITIVE_DOCS_PATH = Path("/root/autodl-tmp/quality_classifier/positives/candidate_positive_docs.jsonl")
-DEFAULT_NEGATIVE_DOCS_PATH = Path("/root/autodl-tmp/quality_classifier/negatives/candidate_negative_docs.jsonl")
-DEFAULT_DATA_OUTPUT_DIR = Path("/root/autodl-tmp/quality_classifier/datasets")
-DEFAULT_LOG_OUTPUT_DIR = Path(".agents/logs/quality_classifier_dataset")
+DEFAULT_POSITIVE_DOCS_PATH = Path("data/quality_classifier/positives/candidate_positive_docs.jsonl")
+DEFAULT_NEGATIVE_DOCS_PATH = Path("data/quality_classifier/negatives/candidate_negative_docs.jsonl")
+DEFAULT_DATA_OUTPUT_DIR = Path("data/quality_classifier/datasets")
+DEFAULT_LOG_OUTPUT_DIR = Path("runs/quality_classifier_dataset")
 DEFAULT_TRAIN_PATH = DEFAULT_DATA_OUTPUT_DIR / "fasttext_quality_train.txt"
 DEFAULT_DEV_PATH = DEFAULT_DATA_OUTPUT_DIR / "fasttext_quality_dev.txt"
 DEFAULT_DEV_RECORDS_PATH = DEFAULT_DATA_OUTPUT_DIR / "quality_dev_records.jsonl"

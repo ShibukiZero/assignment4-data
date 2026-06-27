@@ -24,8 +24,8 @@ def _candidate_model_paths(filename: str, env_var: str) -> list[Path]:
     candidates.extend(
         [
             Path(__file__).resolve().parent / "assets" / filename,
+            Path(__file__).resolve().parents[1] / "models" / filename,
             Path("/data/classifiers") / filename,
-            Path("/root/autodl-tmp/models") / filename,
         ]
     )
     return candidates

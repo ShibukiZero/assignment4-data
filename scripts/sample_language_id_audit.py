@@ -11,8 +11,8 @@ from cs336_data.html_text import extract_text_from_html_bytes
 from cs336_data.langid import identify_language
 
 
-DEFAULT_WARC_PATH = Path("/root/autodl-tmp/raw/cc_samples/example.warc.gz")
-DEFAULT_OUTPUT_DIR = Path(".agents/logs/langid_audit")
+DEFAULT_WARC_PATH = Path("data/raw/cc_samples/example.warc.gz")
+DEFAULT_OUTPUT_DIR = Path("runs/langid_audit")
 
 
 def parse_args() -> argparse.Namespace:

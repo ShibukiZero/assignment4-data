@@ -13,8 +13,8 @@ from transformers import AutoTokenizer
 from xopen import xopen
 
 
-DEFAULT_TOKENIZER_PATH = "/root/autodl-tmp/tokenizers/gpt2"
-DEFAULT_OUTPUT_PATH = Path("/root/autodl-tmp/tokenized/filtered_train_gpt2.bin")
+DEFAULT_TOKENIZER_PATH = "data/tokenizers/gpt2"
+DEFAULT_OUTPUT_PATH = Path("data/tokenized/filtered_train_gpt2.bin")
 
 
 @dataclass

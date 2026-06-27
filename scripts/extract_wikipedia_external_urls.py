@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 
 
-DEFAULT_INPUT_PATH = Path("/root/autodl-tmp/raw/wikipedia/enwiki-latest-externallinks.sql.gz")
-DEFAULT_OUTPUT_PATH = Path("/root/autodl-tmp/raw/wikipedia/extracted_urls.txt.gz")
+DEFAULT_INPUT_PATH = Path("data/raw/wikipedia/enwiki-latest-externallinks.sql.gz")
+DEFAULT_OUTPUT_PATH = Path("data/raw/wikipedia/extracted_urls.txt.gz")
 
 INSERT_PREFIX = "INSERT INTO `externallinks` VALUES "
 URL_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")

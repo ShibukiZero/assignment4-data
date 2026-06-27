@@ -7,8 +7,8 @@ import numpy as np
 from transformers import AutoTokenizer
 
 
-DEFAULT_BIN_PATH = Path("/root/autodl-tmp/tokenized/tokenized_paloma_c4_100_domains_validation.bin")
-DEFAULT_TOKENIZER_PATH = "/root/autodl-tmp/tokenizers/gpt2"
+DEFAULT_BIN_PATH = Path("data/tokenized/tokenized_paloma_c4_100_domains_validation.bin")
+DEFAULT_TOKENIZER_PATH = "data/tokenizers/gpt2"
 
 
 def parse_args() -> argparse.Namespace:

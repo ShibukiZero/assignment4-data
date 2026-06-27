@@ -17,7 +17,7 @@ from typing import Any
 
 
 DEFAULT_CRAWL_ID = "CC-MAIN-2026-12"
-DEFAULT_TOKENIZER = "/root/autodl-tmp/tokenizers/gpt2"
+DEFAULT_TOKENIZER = "data/tokenizers/gpt2"
 
 
 def parse_args() -> argparse.Namespace:

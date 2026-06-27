@@ -4,7 +4,7 @@ set -euo pipefail
 
 CRAWL_ID="${1:-CC-MAIN-2026-12}"
 COUNT="${2:-50}"
-OUTPUT_DIR="${3:-/root/autodl-tmp/raw/${CRAWL_ID}_wet_sample}"
+OUTPUT_DIR="${3:-data/raw/${CRAWL_ID}_wet_sample}"
 CONCURRENCY="${4:-8}"
 
 BASE_URL="https://data.commoncrawl.org/crawl-data/${CRAWL_ID}"

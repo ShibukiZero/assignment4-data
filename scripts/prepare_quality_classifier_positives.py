@@ -9,9 +9,9 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 
-DEFAULT_INPUT_PATH = Path("/root/autodl-tmp/raw/wikipedia/extracted_urls.txt.gz")
-DEFAULT_DATA_OUTPUT_DIR = Path("/root/autodl-tmp/quality_classifier/positives")
-DEFAULT_LOG_OUTPUT_DIR = Path(".agents/logs/quality_classifier_positive_urls")
+DEFAULT_INPUT_PATH = Path("data/raw/wikipedia/extracted_urls.txt.gz")
+DEFAULT_DATA_OUTPUT_DIR = Path("data/quality_classifier/positives")
+DEFAULT_LOG_OUTPUT_DIR = Path("runs/quality_classifier_positive_urls")
 DEFAULT_OUTPUT_URLS_PATH = DEFAULT_DATA_OUTPUT_DIR / "sampled_positive_urls.txt"
 DEFAULT_OUTPUT_SUMMARY_PATH = DEFAULT_LOG_OUTPUT_DIR / "summary.json"
 
@@ -109,7 +109,7 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT_URLS_PATH,
         help=(
             "Path to the output text file containing one sampled URL per line. "
-            "This should usually point to a data-disk location rather than `.agents/logs/`."
+            "This should usually point to a data directory rather than a review-log directory."
         ),
     )
     parser.add_argument(

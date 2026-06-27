@@ -6,8 +6,8 @@ import random
 from pathlib import Path
 
 
-DEFAULT_INPUT_DOCS_PATH = Path("/root/autodl-tmp/quality_classifier/positives/candidate_positive_docs.jsonl")
-DEFAULT_OUTPUT_DIR = Path(".agents/logs/quality_classifier_positive_pool_audit")
+DEFAULT_INPUT_DOCS_PATH = Path("data/quality_classifier/positives/candidate_positive_docs.jsonl")
+DEFAULT_OUTPUT_DIR = Path("runs/quality_classifier_positive_pool_audit")
 
 
 def parse_args() -> argparse.Namespace:

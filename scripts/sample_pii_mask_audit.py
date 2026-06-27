@@ -18,8 +18,8 @@ from cs336_data.pii import (
 )
 
 
-DEFAULT_WARC_PATH = Path("/root/autodl-tmp/raw/cc_samples/example.warc.gz")
-DEFAULT_OUTPUT_DIR = Path(".agents/logs/pii_audit")
+DEFAULT_WARC_PATH = Path("data/raw/cc_samples/example.warc.gz")
+DEFAULT_OUTPUT_DIR = Path("runs/pii_audit")
 
 
 def parse_args() -> argparse.Namespace:

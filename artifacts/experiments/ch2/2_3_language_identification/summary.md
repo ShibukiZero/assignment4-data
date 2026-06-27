@@ -21,5 +21,5 @@ These artifacts support the `writeup.md` answers for `Problem language_identific
 
 ## Provenance
 
-- `samples.jsonl`, `predictions.jsonl`, and `audit_run.log` were copied from `.agents/logs/langid_audit/` and `.agents/logs/terminal.log`.
+- `samples.jsonl`, `predictions.jsonl`, and `audit_run.log` were copied from `runs/langid_audit/` and a terminal log.
 - `human_labels.jsonl` records the validated manual labels used to draft the writeup summary.

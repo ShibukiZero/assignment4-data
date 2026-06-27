@@ -23,8 +23,8 @@ from cs336_data.quality import (
 )
 
 
-DEFAULT_WARC_PATH = Path("/root/autodl-tmp/raw/cc_samples/example.warc.gz")
-DEFAULT_OUTPUT_DIR = Path(".agents/logs/gopher_quality_audit")
+DEFAULT_WARC_PATH = Path("data/raw/cc_samples/example.warc.gz")
+DEFAULT_OUTPUT_DIR = Path("runs/gopher_quality_audit")
 
 
 def parse_args() -> argparse.Namespace:

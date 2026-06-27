@@ -1,8 +1,8 @@
 # Extract vs WET Comparison
 
 - Target URI: `http://0371rykj.com/ipfhsb/34.html`
-- My extract path: `.agents/logs/extract_text_compare/my_extract.txt`
-- WET extract path: `.agents/logs/extract_text_compare/wet_extract.txt`
+- My extract path: `runs/extract_text_compare/my_extract.txt`
+- WET extract path: `runs/extract_text_compare/wet_extract.txt`
 
 ## My Extract Preview
 
@@ -97,8 +97,8 @@ LRHS-1000-LH 1000×1000×1000 1560×1550×2170
 ## Diff Preview
 
 ```diff
---- .agents/logs/extract_text_compare/wet_extract.txt	2026-04-10 00:32:17.164408734 +0800
-+++ .agents/logs/extract_text_compare/my_extract.txt	2026-04-10 00:32:17.164408734 +0800
+--- runs/extract_text_compare/wet_extract.txt	2026-04-10 00:32:17.164408734 +0800
++++ runs/extract_text_compare/my_extract.txt	2026-04-10 00:32:17.164408734 +0800
 @@ -1,126 +1,993 @@
 -人妻,国内老熟妇对白HDXXXX,亚洲AV无码一区东京热久久
  久久久久女人精品毛片,99久久精品无码一区二区毛片,被老外的又粗又大日出了水,一边吃奶一边哭乱抻又乱扭

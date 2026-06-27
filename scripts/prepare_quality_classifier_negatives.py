@@ -12,9 +12,9 @@ from cs336_data.langid import identify_language
 from cs336_data.quality import passes_gopher_quality_filters
 
 
-DEFAULT_WARC_PATH = Path("/root/autodl-tmp/raw/cc_samples/example.warc.gz")
-DEFAULT_DATA_OUTPUT_DIR = Path("/root/autodl-tmp/quality_classifier/negatives")
-DEFAULT_LOG_OUTPUT_DIR = Path(".agents/logs/quality_classifier_negative_texts")
+DEFAULT_WARC_PATH = Path("data/raw/cc_samples/example.warc.gz")
+DEFAULT_DATA_OUTPUT_DIR = Path("data/quality_classifier/negatives")
+DEFAULT_LOG_OUTPUT_DIR = Path("runs/quality_classifier_negative_texts")
 DEFAULT_OUTPUT_DOCS_PATH = DEFAULT_DATA_OUTPUT_DIR / "candidate_negative_docs.jsonl"
 DEFAULT_OUTPUT_SUMMARY_PATH = DEFAULT_LOG_OUTPUT_DIR / "summary.json"
 
@@ -72,7 +72,7 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT_DOCS_PATH,
         help=(
             "Path to the output JSONL file containing candidate negative documents. "
-            "This should usually point to a data-disk location rather than `.agents/logs/`."
+            "This should usually point to a data directory rather than a review-log directory."
         ),
     )
     parser.add_argument(

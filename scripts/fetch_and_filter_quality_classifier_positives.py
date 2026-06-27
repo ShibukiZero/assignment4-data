@@ -17,9 +17,9 @@ from cs336_data.langid import identify_language
 from cs336_data.quality import passes_gopher_quality_filters
 
 
-DEFAULT_INPUT_URLS_PATH = Path("/root/autodl-tmp/quality_classifier/positives/sampled_positive_urls.txt")
-DEFAULT_DATA_OUTPUT_DIR = Path("/root/autodl-tmp/quality_classifier/positives")
-DEFAULT_LOG_OUTPUT_DIR = Path(".agents/logs/quality_classifier_positive_texts")
+DEFAULT_INPUT_URLS_PATH = Path("data/quality_classifier/positives/sampled_positive_urls.txt")
+DEFAULT_DATA_OUTPUT_DIR = Path("data/quality_classifier/positives")
+DEFAULT_LOG_OUTPUT_DIR = Path("runs/quality_classifier_positive_texts")
 DEFAULT_OUTPUT_DOCS_PATH = DEFAULT_DATA_OUTPUT_DIR / "candidate_positive_docs.jsonl"
 DEFAULT_OUTPUT_RESULTS_PATH = DEFAULT_DATA_OUTPUT_DIR / "fetch_results.jsonl"
 DEFAULT_OUTPUT_SUMMARY_PATH = DEFAULT_LOG_OUTPUT_DIR / "summary.json"
@@ -95,7 +95,7 @@ def parse_args() -> argparse.Namespace:
         description=(
             "Fetch and lightly filter candidate positive URLs for the quality "
             "classifier. This stage keeps the large outputs on the data disk and "
-            "writes only a compact summary to `.agents/logs/`."
+            "writes only a compact summary to `runs/`."
         )
     )
     parser.add_argument(

@@ -7,9 +7,9 @@ from pathlib import Path
 import fasttext
 
 
-DEFAULT_DATASET_DIR = Path("/root/autodl-tmp/quality_classifier/datasets")
-DEFAULT_MODEL_DIR = Path("/root/autodl-tmp/quality_classifier/models")
-DEFAULT_LOG_DIR = Path(".agents/logs/quality_classifier_training")
+DEFAULT_DATASET_DIR = Path("data/quality_classifier/datasets")
+DEFAULT_MODEL_DIR = Path("models")
+DEFAULT_LOG_DIR = Path("runs/quality_classifier_training")
 
 DEFAULT_TRAIN_PATH = DEFAULT_DATASET_DIR / "fasttext_quality_train.txt"
 DEFAULT_DEV_PATH = DEFAULT_DATASET_DIR / "fasttext_quality_dev.txt"

@@ -17,4 +17,4 @@ Both extractions recover the same broad page content, including the industrial-p
 
 ## Provenance
 
-Copied from `.agents/logs/extract_text_compare/`.
+Copied from `runs/extract_text_compare/`.

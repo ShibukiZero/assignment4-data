@@ -252,7 +252,7 @@ The final tokenized dataset contains `8,621,270` documents and `9,125,412,810` t
 
 **Answer:** We trained the provided GPT-2-small-shaped model using `cs336-basics/scripts/train.py` on our final GPT-2-tokenized filtered Common Crawl dataset. We used the current assignment code default of `100,000` training steps, which follows the `1.0.4` changelog update that halved the leaderboard training tokens from the older `200,000`-step handout text. The run used `2` H800 GPUs with PyTorch DDP, `train_batch_size=128` per device, `eval_interval=2000`, `eval_iterations=1000`, `bfloat16` autocast, `torch.compile=True`, and the provided cosine learning-rate schedule with `lr=1e-3`, `min_lr=1e-4`, and `warmup_ratio=0.01`.
 
-The run completed successfully in about `10h 26m`, from `2026-04-12T21:33:49+08:00` to `2026-04-13T08:00:14+08:00`. The best validation loss was `3.2873942852020264`, achieved at the final step, `100000`. The final model checkpoint was written on the remote server to `/root/autodl-tmp/training/filtered_cc_5000_train_hopper_100k_20260412_213349/model.pt`, but we do not archive it in the repository because it is a large generated artifact (`619M`).
+The run completed successfully in about `10h 26m`, from `2026-04-12T21:33:49+08:00` to `2026-04-13T08:00:14+08:00`. The best validation loss was `3.2873942852020264`, achieved at the final step, `100000`. The final model checkpoint was written outside the repository in the run's model-output directory, but we do not archive it in the repository because it is a large generated artifact (`619M`).
 
 ![Training curves](artifacts/experiments/ch4/training_run/training_curves.svg)
 

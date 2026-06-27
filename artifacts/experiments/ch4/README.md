@@ -2,9 +2,10 @@
 
 This directory is for small, writeup-oriented evidence from the Chapter 4 full data run.
 
-## Archive Locally
+## Archived Evidence
 
-Use `archive_full_run_artifacts.sh` on the remote server after stage 2 inspection and tokenization summaries are available. The script archives:
+The `full_5000_wet_run/` directory contains the small, writeup-sized evidence
+preserved from the full data run:
 
 - `run_manifest.json`, `events.jsonl`, and `final_report.json` when present.
 - `inspection_samples.md`.
@@ -12,7 +13,7 @@ Use `archive_full_run_artifacts.sh` on the remote server after stage 2 inspectio
 - Pipeline log files.
 - Bucket summary JSON files.
 - Tokenization summary JSON files.
-- A small `manifest.md` with remote data sizes.
+- A small `manifest.md` with run data sizes.
 
 Large candidate/successful WET path lists are intentionally skipped by default; the writeup should rely on the manifest, bucket summaries, and aggregate summaries for provenance and counts.
 
@@ -32,11 +33,11 @@ Keep those on the data disk or delete them after the smaller evidence files and 
 
 The `training_run/` directory contains lightweight evidence for the final GPT-2-small-shaped training run used in the `train_model` writeup section: the SVG learning curve, parsed validation-loss JSON/Markdown, run metadata, final status, and configuration snapshots. It intentionally excludes the full model checkpoint, the full training log, and tokenized `.bin` files.
 
-## Remote-Only Checks
+## Local Checks
 
-These are better checked on the server terminal rather than stored in git:
+These are better checked in the run environment rather than stored in git:
 
-- `df -h /root/autodl-tmp`.
+- `df -h` for the data and run directories.
 - `du -sh` for raw, stage1, stage2, and tokenized directories.
 - `ps` output for currently running processes.
 - Large review logs or per-document data shards.

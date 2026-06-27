@@ -4,14 +4,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASICS_DIR="$REPO_ROOT/cs336-basics"
 
-TRAIN_BIN="${TRAIN_BIN:-/root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746/tokenized/filtered_train_gpt2.bin}"
-VALID_BIN="${VALID_BIN:-/root/autodl-tmp/tokenized/tokenized_paloma_c4_100_domains_validation.bin}"
+TRAIN_BIN="${TRAIN_BIN:-data/processed/online_cc_5000_success_counted/tokenized/filtered_train_gpt2.bin}"
+VALID_BIN="${VALID_BIN:-data/tokenized/tokenized_paloma_c4_100_domains_validation.bin}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-2}"
-TRAIN_LOG_DIR="${TRAIN_LOG_DIR:-/root/autodl-tmp/training/logs}"
+TRAIN_LOG_DIR="${TRAIN_LOG_DIR:-runs/training/logs}"
 RUN_NAME="${RUN_NAME:-your_data_$(date +%Y%m%d_%H%M%S)}"
-MODEL_OUTPUT="${MODEL_OUTPUT:-/root/autodl-tmp/training/$RUN_NAME}"
+MODEL_OUTPUT="${MODEL_OUTPUT:-runs/training/$RUN_NAME}"
 LOG_PATH="$TRAIN_LOG_DIR/$RUN_NAME.log"
-ARTIFACT_DIR="${ARTIFACT_DIR:-$REPO_ROOT/.agents/logs/training/$RUN_NAME}"
+ARTIFACT_DIR="${ARTIFACT_DIR:-$REPO_ROOT/runs/training_artifacts/$RUN_NAME}"
 TRAIN_STEPS="${TRAIN_STEPS:-100000}"
 EVAL_INTERVAL="${EVAL_INTERVAL:-2000}"
 SHUTDOWN_ON_SUCCESS="${SHUTDOWN_ON_SUCCESS:-0}"
@@ -148,7 +148,7 @@ tail -n 200 "$LOG_PATH" > "$ARTIFACT_DIR/training_log_tail.txt"
   echo "validation_curve_md=$ARTIFACT_DIR/validation_curve.md"
   echo
   echo "# Disk"
-  df -h /root/autodl-tmp 2>/dev/null || true
+  df -h "$REPO_ROOT/data" "$REPO_ROOT/runs" 2>/dev/null || true
   echo
   echo "# Key file sizes"
   ls -lh "$TRAIN_BIN" "$VALID_BIN" "$MODEL_OUTPUT/model.pt" "$MODEL_OUTPUT/model_config.json" 2>/dev/null || true

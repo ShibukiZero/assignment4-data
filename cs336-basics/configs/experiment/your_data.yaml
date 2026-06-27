@@ -2,12 +2,12 @@
 
 paths:
   # Set to your data, tokenized with GPT-2 tokenizer!
-  train_bin: /root/autodl-tmp/processed/online_cc_5000_success_counted_20260411_112746/tokenized/filtered_train_gpt2.bin
+  train_bin: data/processed/online_cc_5000_success_counted/tokenized/filtered_train_gpt2.bin
   
   # Paloma C4 100 domains validation set, tokenized with the GPT-2 tokenizer.
-  valid_bin: /root/autodl-tmp/tokenized/tokenized_paloma_c4_100_domains_validation.bin
+  valid_bin: data/tokenized/tokenized_paloma_c4_100_domains_validation.bin
   
-  model_output: /root/autodl-tmp/training/filtered_cc_5000
+  model_output: runs/training/filtered_cc_5000
 
 training:
   # Override these on the command line if you want W&B logging, e.g.

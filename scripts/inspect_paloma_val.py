@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_INPUT_DIR = Path("/root/autodl-tmp/raw/paloma/c4_100_domains/val")
-DEFAULT_OUTPUT_DIR = Path(".agents/logs/paloma_probe")
+DEFAULT_INPUT_DIR = Path("data/raw/paloma/c4_100_domains/val")
+DEFAULT_OUTPUT_DIR = Path("runs/paloma_probe")
 MAX_PREVIEW_CHARS = 500
 
 
